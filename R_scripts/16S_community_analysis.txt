@@ -1,0 +1,184 @@
+#Author: Lukas Bernhardt
+
+#This code for Qiime, PiCRUST and predicted metagenomics was used to produce data for publication 
+
+#Data imported into qiime
+
+qiime tools import\
+   --type 'SampleData[PairedEndSequencesWithQuality]'\
+   --input-path reads\
+  --input-format CasavaOneEightSingleLanePerSampleDirFmt\
+   --output-path demux_022420.qza
+
+#TRUNCATING WAS DONE POST REMOVAL OF PRIMERS WITH CUTADAPT
+	#- this was based off the demux_trim_[date].qzv files for each run
+	#- based on the fact that merge needs at least 20 bp overlap
+
+####cutadapt does recognize ambiguous IUPAC characters!!!
+####removing primers + linker bps
+
+qiime cutadapt trim-paired \
+  --i-demultiplexed-sequences demux.qza \
+  --p-front-f GTGYCAGCMGCCGCGGTAA \
+  --p-front-r CCGYCAATTYMTTTRAGTTT \
+  --o-trimmed-sequences demux-trimmed.qz
+____________________________________________________
+
+####truncating and denoising in dada2####
+
+qiime dada2 denoise-paired\
+  --i-demultiplexed-seqs demux-trimmed.qza\
+  --p-trunc-len-f [see below] --p-trunc-len-r [see below] \
+  --p-n-threads 24\
+  --o-representative-sequences rep-seqs\
+  --o-table table\
+  --o-denoising-stats dns\
+  --verbose
+
+#_101520
+#trunc f 230
+#trunc r 220
+#39 bp overlap	
+
+#_102820
+#trunc f 215
+#trunc r 220
+#26 bp overlap (pretty close)
+
+#_012220
+#trunc f 230
+#trunc r 217
+#36 bp overlap
+______________________________________________________
+####Renamed the samples in feature table _012220 to allow for merge
+#used the qiime feature-table group command
+#*Made new column in metadata file with new sample ID's
+#*Group samples by this new column
+#*Then merge
+
+________________________________________________________
+####Diversity metrics
+### Generate phylogenetic tree ###
+
+qiime phylogeny align-to-tree-mafft-fasttree \
+  --i-sequences rep-seqs.qza \
+  --o-alignment aligned-rep-seqs.qza \
+  --o-masked-alignment masked-aligned-rep-seqs.qza \
+  --o-tree unrooted-tree.qza \
+  --o-rooted-tree rooted-tree.qza
+
+### alpha rarefaction plotting ###
+
+# Look at table.qzv and decide on p-max (median frequency per sample)
+qiime diversity alpha-rarefaction \
+  --i-table table.qza \
+  --i-phylogeny rooted-tree.qza \
+  --p-max-depth 4200 \
+  --m-metadata-file [my metadatafile].tsv \
+  --o-visualization alpha-rarefaction-4200.qzv
+
+#****depth determined from table_merge.qzv
+
+
+_________________________________________________________________________________
+#this is the classifier that I used to train the naive bayes for taxonomic assignment
+#only taxa sequenced using the primers I used were included in the reference sequences
+
+wget -o “gg-13-8-99-nb-classifier.qza” "https://data.qiime2.org/2018.11/common/gg-13-8-99-nb-classifier.qza"
+
+wget ftp://greengenes.microbio.me/greengenes_release/gg_13_5/gg_13_8_otus.tar.gz
+tar -xvzf gg_13_8_otus.tar.gz
+
+
+
+__________________________________________________________________________________
+#removing chloroplasts and mitochondria from my samples
+
+qiime taxa filter-table \
+  --i-table table_merge.qza \
+  --i-taxonomy taxonomy_merge.qza \
+  --p-exclude mitochondria,chloroplast \
+  --o-filtered-table table_merge_noMito_noChlor.qza
+
+qiime taxa filter-seqs
+–i-sequences rep_seqs_merge.qza
+–i-taxonomy taxonomy_merge.qza
+–p-exclude mitochondria,chloroplast
+–o-filtered-sequences rep_seqs_merge_noMito_noChlor.qza
+
+#filtering extraction blanks
+
+qiime feature-table filter-samples \
+  --i-table table_merge_noMito_noChlor.qza \
+  --m-sample-metadata-file sample-metadata.tsv \
+  --p-where "Blank='2'" \
+  --o-filtered-table table_merge_noMito_noChlor_filtered.qza
+
+#eliminating rep-seqs not included in my feature table
+
+qiime feature-table filter-seqs \
+  --i-data rep-seqs_merge_noMito_noChlor.qza \                                                             
+  --i-table table_merge_noMito_noChlor.qza \
+  --o-filtered-data final_rep-seqs_merge_noMito_noChlor.qza
+
+
+_______________________________________________________________________________________________________
+
+###THIS IS THE SECTION FOR THE PREDICTIVE METAGENOMIC PIPELINE FOR COPY NUMBER and GENOME SIZE
+
+#download the broad tree zipped file from Grauver and Eskilinen 2017 in supplementary material
+#and put it into premise
+
+# 1) get your cleaned and filtered rep seqs into fasta format
+
+qiime export
+
+# 2) convert the broad tree fasta file into stockholm format
+
+# 3) Align queries and reference sequences using HMMER
+
+hmmbuild broad_seqs.hmm broad-ref_seqs.sto
+hmmalign -o query_ref_align.sto --mapali ref_seqs.sto broad_seqs.hmm queries.fasta
+
+# 4) Make a reference package with taxtastic (made for use in pplacer)
+
+module purge
+module load linuxbrew/colsa
+
+taxit create -l 16s_rRNA -P my.refpkg2 \
+--aln-fasta broad_tree_ref_seqs_aligned.fasta \
+--tree-stats broad/RAxML_info.broad_tree \
+--tree-file broad/RAxML_bestTree.broad_tree
+
+# 5) Run this is pplacer
+
+module load anaconda/colsa
+source activate sepp-4.3.10
+
+pplacer --fig-tree -p --verbosity 2 --out-dir ../ -o placed_tree  -c ../my.refpkg2 ../ref_query_align.sto
+
+# 6) use guppy to create a tree with your queries on the reference tree
+
+guppy tog -o [file name] --out-dir [output directory] [file with .jplace suffix]
+
+# 7) need you feature table in biom format for use in R
+
+qiime tools extract \
+ --input-path feature-table.qza \
+ --output-path extracted-feature-table
+
+____________________________________________________________________
+
+#####PICRUST ANALYSIS
+
+qiime picrust2 full-pipeline \
+--i-table table_merge_4200.qza \
+--i-seq rep_seqs_4200.qza \
+--p-threads 24 \
+--p-hsp-method mp \
+--p-max-nsti 2 \
+--o-ko-metagenome kegg_ortho_4200 \
+--o-ec-metagenome ec_met_4200 \
+--o-pathway-abundance path_abun_4200 \
+--verbose
+

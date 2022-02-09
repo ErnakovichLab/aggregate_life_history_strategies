@@ -1,0 +1,541 @@
+---
+title: "picante:phyEstimate"
+author: "LTB; Kembal et al. 2012"
+date: "3/23/2020"
+output: html_document
+#This code was used to analyze predicted metagenomic features following the pipeline from Kembal et al. 2012. Code to generate trees used for estimating copy number and genome size is shown in the community_analysis notes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# load the appropriate libraries
+```{r}
+library(vegan)
+library(methods)
+library(nlme)
+library(ape)
+library(picante)
+library(readr)
+```
+
+#phyEstimate Phylogenetic estimation of traits for unobserved taxa
+
+-------------------------------------Usage-------------------------------------
+
+phyEstimate(phy, trait, method="pic", ...)
+phyEstimateDisc(phy, trait, best.state=TRUE, cutoff=0.5, ...)
+
+-------------------------------------Arguments----------------------------------
+
+phy: phylo object
+trait: vector or data.frame containing trait values
+method: ancestral state estimation method used by ace (default="pic")
+best.state: estimate best-supported trait state for discrete variables? (default=TRUE)
+cutoff: support cutoff required to declare a best.state
+
+-------------------------------------Value-------------------------------------
+
+phyEstimate produces a data frame with columns:
+est: Estimated trait value
+se: Standard error of estimated trait value
+
+
+#Phylocom is test data that comes with the picante package that acts as a reference for looking at how this works
+```{r}
+data(phylocom)
+phylocom
+
+phylo_tree <- phylocom$phylo
+phylo_traits <- phylocom$traits
+phylo_samp <- phylocom$sample
+phylo_samp
+```
+
+
+#Example test from phyEstimate documentation (kembel, 2010). This works and produces estimates 
+```{r}
+#generate random phylogeny
+randtree <- rcoal(50)
+Ntip(randtree)
+#simulate trait evolution for a subset of taxa on phylogeny
+randtraits <- sample(rTraitCont(randtree, sigma=10, root.value=100), 40)
+randtraits.df <- as.data.frame(randtraits)
+#estimate trait values for "missing" taxa using PIC method
+phyEstimate(randtree, randtraits.df, method="pic")
+randtree
+randtraits.df
+```
+
+
+#Takes a file and reads the text as a string of characters representing a tree
+```{r}
+#turns the jplace tree file in pplacer into a string of characters
+tree.string <- read_file("C:/Users/lukas/OneDrive/Desktop/tree_w_queries_as_tips_4300")
+
+tree.string_faiths <- read_file("C:/Users/lukas/OneDrive/Desktop/tree.nwk")
+
+#reads the string of characters as a tree (from the ape package)
+tree1 <- read.tree(text=tree.string)
+
+tree_faiths <- read.tree(text= tree.string_faiths)
+
+
+```
+
+#import your traits data (using the traits data from the database created in Gruaver and Eskelinen 2017)
+
+```{r}
+tree_traits <- read.csv("C:/Users/lukas/OneDrive/Desktop/tree_traits.csv")
+
+#tree_traits_df <- as.data.frame(tree_traits)
+
+```
+
+#cool tips and tricks from Kembel: introduction to R for biodiversity
+#use this to explore your tree, make sure your queries are on the tip labels and make sure the number of tips = your # query sequences + # references. 
+
+```{r}
+#list the elements of the phylogeny
+names(tree1)
+
+#looking at tip labels
+tree1$tip.label[1:5]
+
+#how many tips does the phylogeny have. This should equal the number of reference and query sequences
+Ntip(tree1)
+
+#doesn't look great with all of the branches I have
+plot(tree1, cex = 0.1)
+
+```
+
+
+#Making vectors from dataframe tree_traits.  This can be simplified and is probably unecessary
+```{r}
+ref_tax <- as.vector(tree_traits$ref.tax.name)
+rRNA_cop <- as.vector(tree_traits$rRNA.gene.copy.number)
+genome_mbp <- as.vector(tree_traits$genome.size.Mbp)
+traits <- data.frame(ref_tax, rRNA_cop, genome_mbp)
+traits
+```
+
+
+```{r}
+#Setting the first column as row names instead of column heading: ref_tax
+tree_traits2 <- traits[,-1]
+rownames(tree_traits2) <- ref_tax
+
+#check that this worked
+tree_traits2
+
+#Gets rid of column genome_mbp
+tree_traits2$genome_mbp <- NULL
+tree_traits2
+copy_number <- phyEstimate(tree1, tree_traits2, method="pic")
+
+#Remaking the dataframe of traits
+tree_traits2<- traits[,-1]
+tree_traits2
+rownames(tree_traits2) <- ref_tax
+
+#getting rid of column rRNA_cop
+tree_traits2$rRNA_cop <- NULL
+tree_traits2
+genome_size <- phyEstimate(tree1, tree_traits2, method="pic")
+
+```
+
+
+#Now you have two objects copy_number (estimation of copy number for all of your queries) and genome_size (estimated genome size for all of your query sequences).  Both of these files contain standard errors for those estimations (are these errors important???)
+
+Community weighted aggregated trait values
+
+1) adjusting your ASV table for 16S gene copy number (estimated)
+
+# Once you have your estimated gene copy number for all of your query sequences, we can try to use the adjustAbund function from the copunum_estimation.R script in Kembel et al. 2012. You will need to change this path to reflect where you saved this file
+
+```{r}
+#loads in the copynumber estimation workspace by kembel (has functions built in you will need later)
+load("C:/Users/lukas/OneDrive/Desktop/R/copynum_estimation_workspace.RData")
+```
+
+# Functions included here will show up in the gloal environment under functions. Look at adjustAbund and make sure you know what it is about to do. 
+
+#Import your feature table- column headers (ASVs) must be the same as what appears in the copy number data frame
+
+qiime tools extract \
+ --input-path feature-table.qza \
+ --output-path extracted-feature-table
+ 
+```{r}
+library(dplyr)
+library(biomformat)
+ASV_reads <- read_biom("C:/Users/lukas/OneDrive/Desktop/table_merge_filt_4300.biom")
+ASV_table <- as.data.frame(as.matrix(biom_data(ASV_reads)))
+write.csv(ASV_table, "feature-table.csv")
+#transpose a data frame
+ASV_table_t <- t(ASV_table)
+
+```
+
+
+```{r}
+#adjustAbund takes two arguments copynum: as a dataframe or vector and comm: a community matrix with column names that correspond the the names in the copynum dataframe
+#returns a list with 3 elements: relabund (the original data frame in relative abundance, relabund.adj (relative abundance corrected for copy number), and copynum (a data frame with copy numbers for each ASV)
+
+adjusted_table <- adjustAbund(ASV_table_t, copy_number)
+
+```
+
+```{r}
+adjusted_table_df <- as.data.frame(adjusted_table$relabund.adj)
+
+#this will write the table to a data frame if you are interested in checking it out in excel
+write.csv(adjusted_table_df, "adjust.csv")
+
+```
+
+#this is how to go from adjusted tables to community weighted mean trait values
+https://cran.r-project.org/web/packages/FD/FD.pdf
+
+Description:
+FD is a package to compute different multidimensional FD indices. It implements a distance-based framework to measure FD that allows any number and type of functional traits, and can also consider species relative abundances. It also contains other useful tools for functional ecology
+
+FD stands for Functional Diversity
+```{r}
+library(FD)
+```
+#use this codeblock to see the inputs that FD will take. Make note of how the data are structured. trait is a spp. by trait data frame, abun is a sample unit by species data frame
+```{r}
+FD_test <- dummy
+str(dummy)
+FD_test_trait <- dummy$trait
+FD_test_abun <- dummy$abun
+head(FD_test_trait)
+head(FD_test_abun)
+
+```
+
+```{r}
+#set up predicted genome size dataframe and copy_number df to match specifications of dbFD
+
+genome_size$se <- NULL
+genome_size
+copy_number$se <- NULL
+
+#functcomp taxes a matrix so adjust your data frame to a matrix
+adjusted_table_dfm <- as.matrix(adjusted_table_df)
+
+#calculating CWM values for genome size
+CWM_mbp <- functcomp(genome_size, adjusted_table_dfm, CWM.type = c("dom"), bin.num = NULL)
+
+#calculating CWM values for copy number
+CWM_copy <- functcomp(copy_number, adjusted_table_dfm, CWM.type = c("dom"), bin.num = NULL) 
+
+write.csv(CWM_mbp, "C:/Users/lukas/OneDrive/Desktop/CWM_mbp.csv")
+write.csv(CWM_copy, "C:/Users/lukas/OneDrive/Desktop/CWM_copy.csv")
+```
+
+
+#Predicted metagenomics (dealing with KEGG orthologs)
+```{r}
+library(vegan)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(vegan)
+library(dplyr)
+library(ggplot2)
+#library(scatterplot3d)
+#library(vegan3d)
+library(readr)
+library(tibble)
+library(RVAideMemoire)
+#library(vegan3d)
+#library(rgl)
+#library(plot3D)
+library(RColorBrewer)
+library(ggrepel)
+library(multcomp)
+```
+
+#KEGG table imported as species_cl
+```{r}
+kegg_orthos= read.csv(file.choose(), sep=",", head= TRUE)
+head(kegg_orthos)
+
+
+jst_kegg_orthos <- as.data.frame(kegg_orthos[,6:ncol(kegg_orthos)])
+head(jst_kegg_orthos)
+
+```
+
+```{r}
+kegg_orthos$Block <- factor(kegg_orthos$Block, levels= c("1", "2", "3", "4"))
+kegg_orthos$Tillage <- factor(kegg_orthos$Tillage, levels= c("No-Till", "Full-Till"))
+kegg_orthos$Pesticide <- factor(kegg_orthos$Pesticide, levels= c("No-PST", "PST"))
+kegg_orthos$AggSize <- factor(kegg_orthos$AggSize, levels= c("<0.025mm", "0.025mm-1mm", "1mm-2mm", ">2mm"))
+
+```
+
+
+
+```{r}
+
+lg_jst_kegg_orthos <- log1p(jst_kegg_orthos)
+lg_jst_kegg_orthos <- data.matrix(lg_jst_kegg_orthos)
+
+
+lg_kegg_bray_dist <- vegdist(lg_jst_kegg_orthos, method = "bray")
+
+```
+
+
+
+#NMDS: with bray curtis distance measure. Performed for multiple axes. axis where stress decreased by >0.05 was retained. Best solution is on three axes
+Stress evalution:
+<.05 - excellent
+.05-.10 - good
+.10-.20 - usable, potential to mislead at upper end
+
+```{r}
+NMDS_lg_cl_1 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k= 1, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_2 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k=2, autotransform = FALSE, trymax= 1000)
+NMDS_lg_cl_3 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k=3, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_4 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k= 4, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_5 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k=5, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_6 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k=6, autotransform = FALSE, trymax = 1000)
+
+NMDS_lg_cl_3 <- metaMDS(lg_jst_kegg_orthos, distance = "bray", k=3, autotransform = FALSE, trymax = 1000)
+
+
+#determined 3 axis solution was best
+spp_stressvector<-as.vector(c(NMDS_lg_cl_1$stress, NMDS_lg_cl_2$stress, NMDS_lg_cl_3$stress, NMDS_lg_cl_4$stress, NMDS_lg_cl_5$stress, NMDS_lg_cl_6$stress))
+plot(spp_stressvector)
+
+NMDS_lg_cl_2$stress
+NMDS_lg_cl_3$stress
+NMDS_lg_cl_4$stress
+NMDS_lg_cl_5$stress
+
+```
+***Adding environmental variables***
+
+#Making environmental matrix from my original aggregate_isolation raw data for just the no-till sites
+```{r}
+kegg_orthos
+env_var <- as.data.frame(kegg_orthos[,1:5])
+env_var
+```
+
+
+#extracting the site and species scores from the NMDS for plotting
+```{r}
+site.scrs <- as.data.frame(scores(NMDS_lg_cl_3, display = "sites"))
+
+#Two ways to accomplish the same thing
+
+site.scrs$AggSize = kegg_orthos$AggSize
+site.scrs$Tillage = kegg_orthos$Tillage
+site.scrs$Block = kegg_orthos$Block
+site.scrs$Pesticide = kegg_orthos$Pesticide
+site.scrs
+
+#Species Scores
+spp.scrs <- as.data.frame(scores(NMDS_lg_cl_3, display = "species"))
+spp.scrs <- cbind(spp.scrs, Species = row.names(spp.scrs))
+
+```
+
+```{r}
+env_var
+
+env_var$Block <- as.factor(env_var$Block)
+env_var$AggSize <- as.factor(env_var$AggSize)
+env_var$Tillage <- as.factor(env_var$Tillage)
+env_var$Pesticide <- as.factor(env_var$Pesticide)
+
+
+env_var_rel_lg <- decostand(select_if(env_var, is.numeric), method = "log")
+
+env_var_rel_fit <- envfit(NMDS_lg_cl_3, env_var_rel_lg, choices = 1:2, permutations = 999)
+env.scores <- as.data.frame(scores(env_var_rel_fit, display = "vectors"))
+env.scores
+env.scores2 <- cbind(env.scores, env.variables = rownames(env.scores), pval = env_var_rel_fit$vectors$pvals)
+env.scores2 <- subset(env.scores2, pval<=0.05)
+env.scores2
+# NMDS_1v2_spp_scrs_with_env
+```
+
+
+
+***Plotting***
+
+Add sites
+```{r}
+plot(NMDS_lg_cl_3, "sites")
+orditorp(plot(NMDS_lg_cl_3), display="sites", col= "red", air= 0.01)   # Gives points labels
+
+#color by till_treat
+kegg_orthos_NMDS <- ggplot(site.scrs, aes(x = NMDS1, y = NMDS2)) + geom_point(aes(colour = factor(tillage), shape= AggSize), size = 2) + labs(colour = "Tillage Treatment", shape = "Aggregate Size Class") + theme_classic() + theme(legend.title = element_text(size = 10, face = "bold"), legend.text = element_text(size = 8, face = "bold")) + scale_color_manual(values= c("#FF1F5B", "#009ADE"))
+  
+#scale_color_manual(values= c("darkolivegreen3", "sandybrown","lightskyblue3", "thistle3")) 
+
+kegg_orthos_NMDS
+
+NMDS_1v2_with_env_KEGG <- kegg_orthos_NMDS + geom_segment(data = env.scores2, aes(x = 0, xend = NMDS1*0.8, y = 0, yend = NMDS2*0.8), arrow = arrow(length = unit(0.25, "cm")), colour = "grey10", lwd = 0.3) + ggrepel::geom_text_repel(data = env.scores2, aes(x = NMDS1*0.9, y = NMDS2*0.9, label = env.variables), cex = 4, direction = "both", segment.size = 0.25)
+NMDS_1v2_with_env_KEGG  
+
+```
+
+
+#Add environmental variables
+```{r}
+NMDS_1v2_with_env <- NMDS_1v2 + geom_segment(data = env.scores2, aes(x = 0, xend = NMDS1, y = 0, yend = NMDS2), arrow = arrow(length = unit(0.25, "cm")), colour = "grey10", lwd = 0.3) + ggrepel::geom_text_repel(data = env.scores2, aes(x = NMDS1, y = NMDS2, label = env.variables), cex = 4, direction = "both", segment.size = 0.25)
+NMDS_1v2_with_env                                                                                                   
+
+
+```
+
+
+
+#Saving figures for publication!
+```{r}
+NMDS_1v2_with_env
+setwd("_______________________")
+ggsave("community_class_NMDS.png", plot = NMDS_1v2_with_env, dpi = 400, height = 5, width = 6)
+
+```
+
+
+By changing NMDS1 and NMDS2, you can make figures for NMDS1 vs. NMDS3 and NMDS2 vs NMDS3
+
+NMDS axis: 
+The interpretation of NMDS ordinations is fundementally different than PCA. The first axis in PCA, by definition, always explains the most variation in the data. The second axis explains the second most variation orthoganal to the first axis. NMDS axis should be treated as meaningless. The number of axis is defined by the user, and the algorithm then attempts to reposition the observations in a way that maintains their ranked distances.  
+
+
+********************************PERMANOVA*********************************************************
+
+```{r}
+#Adonis acts on matrices
+lg_kegg_matrix <- as.matrix(lg_jst_kegg_orthos)
+
+
+##makes objects or or vectors of you treatments for use in next step(don't exactly know why I needed to do this but I had to) CHECK FOR YOURSELF!!!
+tillage <-as.factor(kegg_orthos$Tillage)
+pst<-as.factor(kegg_orthos$Pesticide)
+block<-as.factor(kegg_orthos$Block)
+agg_class<-as.factor(kegg_orthos$AggSize)
+head(kegg_orthos)
+
+#this is where you actually do the permanovas.  There are slight differences between using "+", "*" or "/" for the interaction effects.  you may need to look into what works well for you if your stuff is factorial (replace ENZdata.M with whatever you called your response matrix).  Do some research on strata= this constrains the permutations and is an important thing to consider. There are also a shitton more options that can be set to check out. there is also an adonis2 but I don't know the difference!!!
+adonis(jst_kegg_orthos ~ agg_class*tillage, distance="bray", permutations = 999, strata = block)
+```
+
+#This does pairwise comparrisons to check for differences withing treatment levels. I checked pairwise to see if there were differences among my size classes or block.  The first line of code here makes a distance matrix using bray curtis distance from my original data matrix
+
+
+#agg_class
+1= 1-2mm
+2= 0.025mm- 1mm
+3= <0.025 mm
+4= >2mm
+
+```{r}
+###pairwise comparisons of emergent data
+###first we need to create a distance matrix
+
+pairwise.perm.manova(lg_kegg_matrix, tillage, nperm = 1000, p.method = "benjami-hochberg")
+pairwise.perm.manova(lg_kegg_bray_dist, block, nperm = 1000, p.method = "bonferroni")
+pairwise.perm.manova(lg_kegg_bray_dist, agg_class, nperm = 1000, p.method = "bonferroni")
+pairwise.perm.manova(lg_kegg_bray_dist, pst, nperm = 1000, p.method = "bonferroni")
+```
+
+```{r}
+head(kegg_orthos)
+tillage_NT <-as.factor(kegg_ortho_NT$Tillage)
+pst_NT<-as.factor(kegg_ortho_NT$Pesticide)
+block_NT<-as.factor(kegg_ortho_NT$Block)
+agg_class_NT<-as.factor(kegg_ortho_NT$AggSize)
+
+tillage_FT <-as.factor(kegg_ortho_FT$Tillage)
+pst_FT<-as.factor(kegg_ortho_FT$Pesticide)
+block_FT<-as.factor(kegg_ortho_FT$Block)
+agg_class_FT<-as.factor(kegg_ortho_FT$AggSize)
+kegg_ortho_FT
+jst_kegg_orthos_NT
+
+
+
+kegg_ortho_NT <- kegg_orthos[which(kegg_orthos$Tillage == "No-Till"),]
+kegg_ortho_FT <- kegg_orthos[which(kegg_orthos$Tillage == "Full-Till"),]
+
+jst_kegg_orthos_NT <- as.data.frame(kegg_ortho_NT[,6:ncol(kegg_ortho_NT)])
+jst_kegg_orthos_FT <- as.data.frame(kegg_ortho_FT[,6:ncol(kegg_ortho_FT)])
+jst_kegg_orthos_FT
+
+jst_kegg_FT_mat <- as.matrix(jst_kegg_orthos_FT)
+
+adonis(jst_kegg_orthos_NT ~ agg_class_NT* pst_NT, distance="bray", permutations = 999, strata = block_NT)
+
+adonis(jst_kegg_orthos_FT ~ agg_class_FT, distance="bray", permutations = 999, strata = block_FT)
+
+
+
+```
+
+
+```{r}
+kegg_ortho_mic <- kegg_orthos[which(kegg_orthos$AggSize == "<0.025mm"),]
+kegg_ortho_sm_mac <- kegg_orthos[which(kegg_orthos$AggSize == "0.025mm-1mm"),]
+kegg_ortho_lg_mac <- kegg_orthos[which(kegg_orthos$AggSize == "1mm-2mm"),]
+kegg_ortho_meg <- kegg_orthos[which(kegg_orthos$AggSize == ">2mm"),]
+kegg_ortho_meg
+
+head(kegg_orthos)
+tillage_mic <-as.factor(kegg_ortho_mic$Tillage)
+pst_mic<-as.factor(kegg_ortho_mic$Pesticide)
+block_mic<-as.factor(kegg_ortho_mic$Block)
+
+
+tillage_sm_mac <-as.factor(kegg_ortho_sm_mac$Tillage)
+pst_sm_mac<-as.factor(kegg_ortho_sm_mac$Pesticide)
+block_sm_mac<-as.factor(kegg_ortho_sm_mac$Block)
+
+tillage_lg_mac <-as.factor(kegg_ortho_lg_mac$Tillage)
+pst_lg_mac<-as.factor(kegg_ortho_lg_mac$Pesticide)
+block_lg_mac<-as.factor(kegg_ortho_lg_mac$Block)
+
+tillage_meg <-as.factor(kegg_ortho_meg$Tillage)
+pst_meg<-as.factor(kegg_ortho_meg$Pesticide)
+block_meg<-as.factor(kegg_ortho_meg$Block)
+
+
+jst_kegg_orthos_mic <- as.data.frame(kegg_ortho_mic[,6:ncol(kegg_ortho_mic)])
+jst_kegg_orthos_sm_mac <- as.data.frame(kegg_ortho_sm_mac[,6:ncol(kegg_ortho_sm_mac)])
+jst_kegg_orthos_lg_mac <- as.data.frame(kegg_ortho_lg_mac[,6:ncol(kegg_ortho_lg_mac)])
+jst_kegg_orthos_meg <- as.data.frame(kegg_ortho_meg[,6:ncol(kegg_ortho_meg)])
+
+
+adonis(jst_kegg_orthos_mic ~ tillage_mic, distance="bray", permutations = 999, strata = block_mic)
+
+adonis(jst_kegg_orthos_sm_mac ~ tillage_sm_mac, distance="bray", permutations = 999, strata = block_sm_mac)
+
+adonis(jst_kegg_orthos_lg_mac ~ tillage_lg_mac, distance="bray", permutations = 999, strata = block_lg_mac)
+
+adonis(jst_kegg_orthos_meg ~ tillage_meg, distance="bray", permutations = 999, strata = block_meg)
+
+pairwise.perm.manova(jst_kegg_orthos_meg, tillage_meg, nperm = 1000, p.method = "benjami-hochberg")
+
+```
+
+```{r}
+dist_keggs <- vegdist(jst_kegg_orthos, method = "bray")
+betadisper(dist_keggs, tillage, type= c("median"))
+
+```
+
+

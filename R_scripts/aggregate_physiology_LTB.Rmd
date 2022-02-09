@@ -1,0 +1,1567 @@
+---
+title: "aggregate_physiological_analysis"
+author: "Lukas Bernhardt"
+date: "9/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Loading necessary Libraries
+```{r}
+library(gridExtra)
+library(ggplot2)
+library(vegan)
+library(multcomp)
+library(ape)
+library(dplyr)
+library(ggpubr)
+library(vegan)
+library(car)
+library(htmltools)
+library(vegan3d)
+library(BiodiversityR)
+library(RVAideMemoire)
+library(multcomp)
+library(multcompView)
+library(ape)
+```
+
+#import the project data file "aggregate_isolation_raw_LTB.csv"
+```{r}
+agg_iso <- as.data.frame(read.csv("C:/Users/lukas/OneDrive/Desktop/aggregate_isolation_raw_LTB.csv"))
+```
+
+#Setting up data structure
+```{r}
+agg_iso$block <- as.factor(agg_iso$block)
+agg_iso$treat <- as.factor(agg_iso$treat)
+agg_iso$till_treat <- as.factor(agg_iso$till_treat)
+agg_iso$pst_treat <- as.factor(agg_iso$pst_treat)
+```
+
+#Ordering factors as they will appear in figures
+```{r}
+agg_iso$treat <- factor(agg_iso$treat, levels= c("1", "2", "3", "4"))
+agg_iso$block <- factor(agg_iso$block, levels= c("1", "2", "3", "4"))
+agg_iso$till_treat <- factor(agg_iso$till_treat, levels= c("No-Till", "Full-Till"))
+agg_iso$pst_treat <- factor(agg_iso$pst_treat, levels= c("No-PST", "PST"))
+agg_iso$agg_class <- factor(agg_iso$agg_class, levels= c("<0.25mm", "0.25mm-1mm", "1mm-2mm", ">2mm"))
+```
+
+
+#################################--Abiotic_Analysis--#######################
+
+--------------------------------NO-TILL-------------------------------------
+#Select just the abiotic fators from original dataframe for both no-till and full-till plots
+```{r}
+agg_abio_NT <- agg_iso[which(agg_iso$till_treat == "No-Till"),]
+agg_abio_FT <- agg_iso[which(agg_iso$till_treat == "Full-Till"),]
+```
+
+
+#Calculating mean, sd and se for all my no-till abiotic measurements
+```{r}
+# A new matrix was created with the mean and sd by agg_class for total C
+agg_TC_NT = aggregate(agg_abio_NT$TC, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_TC_NT$sd = aggregate(agg_abio_NT$TC, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_TC_NT$se = agg_TC_NT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for total N
+agg_TN_NT = aggregate(agg_abio_NT$TN, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_TN_NT$sd = aggregate(agg_abio_NT$TN, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_TN_NT$se = agg_TN_NT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for C:N
+agg_CN_NT = aggregate(agg_abio_NT$C.N, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_CN_NT$sd = aggregate(agg_abio_NT$C.N, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CN_NT$se = agg_CN_NT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for pH
+agg_pH_NT = aggregate(agg_abio_NT$pH, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_pH_NT$sd = aggregate(agg_abio_NT$pH, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_pH_NT$se = agg_pH_NT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for EC
+agg_EC_NT = aggregate(agg_abio_NT$EC, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_EC_NT$sd = aggregate(agg_abio_NT$EC, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_EC_NT$se = agg_EC_NT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for WHC
+agg_WHC_NT = aggregate(agg_abio_NT$WHC, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_WHC_NT$sd = aggregate(agg_abio_NT$WHC, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_WHC_NT$se = agg_WHC_NT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for microbial biomass
+agg_BM_NT = aggregate(agg_abio_NT$MBC_ando, by = list(agg_abio_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_BM_NT$sd = aggregate(agg_abio_NT$MBC_ando, by= list(agg_abio_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_BM_NT$se = agg_BM_NT[,3]/sqrt(8)
+agg_BM_NT
+```
+
+
+--------------Checking Normality/ Running ANOVA for No-Till plots----------
+#checking my abiotic variables for normality for no-till plots
+```{r}
+shapiro.test(agg_abio_NT$TC)
+shapiro.test(agg_abio_NT$TN)
+shapiro.test(agg_abio_NT$C.N)
+shapiro.test(agg_abio_NT$WHC)
+shapiro.test(agg_abio_NT$EC)
+shapiro.test(agg_abio_NT$pH)
+shapiro.test(agg_abio_NT$MBC_ando)
+
+#pH was not normal (p < 0.05) so we need to log transform the data prior to running ANOVA
+agg_abio_NT$pH_log = log10(agg_abio_NT[,7])
+```
+
+
+```{r}
+######## Compute the analysis of variance - need to do two way to check if plot and/or depth has effect
+# one way anova for carbon %
+TC.aov_NT <- aov(TC ~ agg_class, data = agg_abio_NT)
+```
+
+#Nitrogen varied significantly by aggregate size class in the no-till plots
+```{r}
+# one way anova for nitrogen %
+TN.aov_NT <- aov(CWM_mbp ~ agg_class, data = agg_abio_NT)
+## Summary of the analysis
+summary(TN.aov_NT)
+
+#Checking assumptions of the ANOVA
+## Assumption 1: Normality of the residual
+plot(TN.aov_NT,2) #Q-Q plot
+shapiro.test(x = residuals(object = TN.aov_NT)) # Shapiro-Wilk test
+
+#Data was normal, we can trust the ANOVA! 
+TUKEY_TN_NT <- TukeyHSD(x = TN.aov_NT, 'agg_class', conf.level=0.95)
+TUKEY_TN_NT
+
+```
+
+```{r}
+# one way anova for Carbon nitrogen ratio 
+CN.aov_NT <- aov(C.N ~ agg_class, data = agg_abio_NT)
+#NOT SIGNIFICANT!!!
+```
+
+```{r}
+# one way anova for water holding capacity
+WHC.aov_NT <- aov(WHC ~ agg_class, data = agg_abio_NT)
+
+TUKEY_WHC_NT <- TukeyHSD(x = WHC.aov_NT, 'agg_class', conf.level=0.95)
+TUKEY_WHC_NT
+```
+
+```{r}
+# one way anova for Electric Conductivity
+EC.aov_NT <- aov(EC ~ agg_class, data = agg_abio_NT)
+#NOT SIGNIFICANT!!!
+```
+
+```{r}
+# one way anova for pH
+pH.aov_NT <- aov((pH_log)~ agg_class, data = agg_abio_NT)
+#NOT SIGNIFICANT!!!
+```
+
+```{r}
+
+MBC_ando.aov_NT <- aov(MBC_ando ~ agg_class, data = agg_abio_NT)
+
+summary(MBC_ando.aov_NT)
+
+plot(MBC_ando.aov_NT,2) #Q-Q plot
+shapiro.test(x = residuals(object = MBC_ando.aov_NT)) # Shapiro-Wilk test
+
+TUKEY_ando_NT <- TukeyHSD(x = MBC_ando.aov_NT, 'agg_class', conf.level=0.95)
+TUKEY_ando_NT
+```
+
+---------------------Full-Till Abiotics--------------------------------
+
+#Calculating mean, sd and se for all my no-till abiotic measurements
+```{r}
+#Matrix was created with the mean and sd by agg_class for total C
+agg_TC_FT = aggregate(agg_abio_FT$TC, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_TC_FT$sd = aggregate(agg_abio_FT$TC, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_TC_FT$se = agg_TC_FT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for total N
+agg_TN_FT = aggregate(agg_abio_FT$TN, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_TN_FT$sd = aggregate(agg_abio_FT$TN, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_TN_FT$se = agg_TN_FT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for C:N
+agg_CN_FT = aggregate(agg_abio_FT$C.N, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_CN_FT$sd = aggregate(agg_abio_FT$C.N, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CN_FT$se = agg_CN_FT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for pH
+agg_pH_FT = aggregate(agg_abio_FT$pH, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_pH_FT$sd = aggregate(agg_abio_FT$pH, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_pH_FT$se = agg_pH_FT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for EC
+agg_EC_FT = aggregate(agg_abio_FT$EC, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_EC_FT$sd = aggregate(agg_abio_FT$EC, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_EC_FT$se = agg_EC_FT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for WHC
+agg_WHC_FT = aggregate(agg_abio_FT$WHC, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_WHC_FT$sd = aggregate(agg_abio_FT$WHC, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_WHC_FT$se = agg_WHC_FT[,3]/sqrt(8)
+
+# A new matrix was created with the mean and sd by agg_class for microbial biomass
+agg_BM_FT = aggregate(agg_abio_FT$MBC_ando, by = list(agg_abio_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_BM_FT$sd = aggregate(agg_abio_FT$MBC_ando, by= list(agg_abio_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_BM_FT$se = agg_BM_FT[,3]/sqrt(8)
+```
+
+
+#Running ANOVA and checking the assumptions of the test for Full-Till sites
+```{r}
+shapiro.test(agg_abio_FT$TC)
+shapiro.test(agg_abio_FT$TN)
+shapiro.test(agg_abio_FT$C.N)
+shapiro.test(agg_abio_FT$WHC)
+shapiro.test(agg_abio_FT$EC)
+shapiro.test(agg_abio_FT$pH)
+shapiro.test(agg_abio_FT$MBC_ando)
+```
+
+
+```{r}
+# one way anova for carbon %
+TC.aov_FT <- aov(TC ~ agg_class, data = agg_abio_FT)
+```
+
+```{r}
+# one way anova for nitrogen %
+TN.aov_FT <- aov(TN~agg_class, data = agg_abio_FT)
+```
+
+```{r}
+# one way anova for carbon nitrogen ratio 
+CN.aov_FT <- aov(C.N ~ agg_class, data = agg_abio_FT)
+```
+
+#WHC varied significantly among aggregate size classes in the Full Till sites
+```{r}
+# one way anova for water holding capacity
+WHC.aov_FT <- aov(log(WHC) ~ agg_class, data = agg_abio_FT)
+## Summary of the analysis
+summary(WHC.aov_FT)
+
+######### Check Assumptions of the test- only do if there is significance? 
+## Assumption 1: Normality of the residual
+plot(WHC.aov_FT,2) #Q-Q plot
+shapiro.test(x = residuals(object = WHC.aov_FT)) # Shapiro-Wilk test
+
+TUKEY_WHC_FT <- TukeyHSD(x = WHC.aov_FT, 'agg_class', conf.level=0.95)
+TUKEY_WHC_FT
+```
+
+```{r}
+# one way anova for Electric Conductivity
+EC.aov_FT <- aov(log(EC) ~ agg_class, data = agg_abio_FT)
+```
+
+```{r}
+# one way anova for pH
+pH.aov_FT <- aov(pH ~ agg_class, data = agg_abio_FT)
+```
+
+```{r}
+MBC_ando.aov_FT <- aov(MBC_ando ~ agg_class, data = agg_abio_FT)
+summary(MBC_ando.aov_FT)
+
+plot(MBC_ando.aov_FT,2) #Q-Q plot
+shapiro.test(x = residuals(object = MBC_ando.aov_FT)) # Shapiro-Wilk test
+## Assumption 2: Homogeineity of Variance
+leveneTest(MBC_ando ~ agg_class, data = agg_abio_FT)
+
+TUKEY_ando_FT <- TukeyHSD(x = MBC_ando.aov_FT, 'agg_class', conf.level=0.95)
+TUKEY_ando_FT
+```
+
+--------------------Tillage by agg_class all abiotics----------------------
+
+```{r}
+agg_abio <- agg_iso[,1:14]
+```
+
+#testing for normality of my variables and log transforming any that are whack
+```{r}
+shapiro.test(agg_abio$TC)
+shapiro.test(agg_abio$TN)
+shapiro.test(agg_abio$C.N)
+shapiro.test(agg_abio$WHC)
+shapiro.test(agg_abio$EC)
+shapiro.test(agg_abio$pH)
+
+#pH was not normal (p < 0.05) so we need to log transform the data prior to running ANOVA
+agg_abio$pH_log = log10(agg_abio[,7])
+agg_abio$EC_log = log10(agg_abio[,8])
+```
+
+```{r}
+# A new matrix was created with the mean and sd by agg_class for total C
+agg_TC = aggregate(agg_abio$TC, by = list(agg_abio$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_TC$sd = aggregate(agg_abio$TC, by= list(agg_abio$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_TC$se = agg_TC[,3]/sqrt(16)
+agg_TC
+
+# A new matrix was created with the mean and sd by agg_class for total N
+agg_TN = aggregate(agg_abio$TN, by = list(agg_abio$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_TN$sd = aggregate(agg_abio$TN, by= list(agg_abio$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_TN$se = agg_TN[,3]/sqrt(16)
+agg_TN
+
+# A new matrix was created with the mean and sd by agg_class for C:N
+agg_CN = aggregate(agg_abio$C.N, by = list(agg_abio$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_CN$sd = aggregate(agg_abio$C.N, by= list(agg_abio$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CN$se = agg_CN[,3]/sqrt(16)
+agg_CN
+
+# A new matrix was created with the mean and sd by agg_class for pH
+agg_pH = aggregate(agg_abio$pH, by = list(agg_abio$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_pH$sd = aggregate(agg_abio$pH, by= list(agg_abio$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_pH$se = agg_pH[,3]/sqrt(16)
+agg_pH
+
+# A new matrix was created with the mean and sd by agg_class for EC
+agg_EC = aggregate(agg_abio$EC, by = list(agg_abio$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_EC$sd = aggregate(agg_abio$EC, by= list(agg_abio$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_EC$se = agg_EC[,3]/sqrt(16)
+agg_EC
+
+# A new matrix was created with the mean and sd by agg_class for WHC
+agg_WHC = aggregate(agg_abio$WHC, by = list(agg_abio$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_WHC$sd = aggregate(agg_abio$WHC, by= list(agg_abio$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_WHC$se = agg_WHC[,3]/sqrt(16)
+agg_WHC
+
+# A new matrix was created with the mean and sd by agg_class for WHC
+agg_CUE = aggregate(agg_iso$CUE, by = list(agg_iso$agg_class), mean, na.rm= TRUE)
+# This appended the sd to the existing matrix.
+agg_CUE$sd = aggregate(agg_iso$CUE, by= list(agg_iso$agg_class), sd, na.rm= TRUE)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CUE$se = agg_CUE[,3]/sqrt(16)
+```
+
+
+###########################--Enzyme analysis--############################
+
+#Relativizing enzymes by ug biomass
+```{r}
+agg_iso$LAP_bm.1 <- agg_iso$LAP_raw / agg_iso$MBC_ando
+agg_iso$CBH_bm.1 <- agg_iso$CBH_raw / agg_iso$MBC_ando
+agg_iso$BG_bm.1 <- agg_iso$BG_raw / agg_iso$MBC_ando
+agg_iso$NAG_bm.1 <- agg_iso$NAG_raw / agg_iso$MBC_ando
+agg_iso$PHOS_bm.1 <- agg_iso$PHOS_raw / agg_iso$MBC_ando
+
+agg_iso$t_c_bm.1 <- (agg_iso$CBH_raw + agg_iso$BG_raw) / agg_iso$MBC_ando
+agg_iso$t_n_bm.1 <- (agg_iso$NAG_raw + agg_iso$LAP_raw) / agg_iso$MBC_ando
+agg_iso$t_p_bm.1 <- agg_iso$PHOS_raw / agg_iso$MBC_ando
+
+agg_iso$t_enz_bm.1 <- agg_iso$t_p_bm.1 + agg_iso$t_c_bm.1 + agg_iso$t_n_bm.1
+```
+
+-------------------------------------------------No-Till-------------------------------------------
+#No-Till
+```{r}
+agg_phys_NT <- agg_iso[which(agg_iso$till_treat == "No-Till"),]
+```
+
+
+```{r}
+till<-as.factor(agg_phys_NT$till_treat)
+pst<-as.factor(agg_phys_NT$pst_treat)
+block<-as.factor(agg_phys_NT$block)
+AggSize<-as.factor(agg_phys_NT$agg_class)
+```
+
+#analyzing raw enzyme data (uncorrected for biomass)- data presented in table S1
+```{r}
+agg_PHOS_NT = aggregate(agg_phys_NT$PHOS_raw, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_PHOS_NT$sd = aggregate(agg_phys_NT$PHOS_raw, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_PHOS_NT$se = agg_PHOS_NT[,3]/sqrt(8)
+agg_PHOS_NT
+
+agg_LAP_NT = aggregate(agg_phys_NT$LAP_raw, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_LAP_NT$sd = aggregate(agg_phys_NT$LAP_raw, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_LAP_NT$se = agg_LAP_NT[,3]/sqrt(8)
+agg_LAP_NT
+
+agg_CBH_NT = aggregate(agg_phys_NT$CBH_raw, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_CBH_NT$sd = aggregate(agg_phys_NT$CBH_raw, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CBH_NT$se = agg_CBH_NT[,3]/sqrt(8)
+agg_CBH_NT
+
+agg_NAG_NT = aggregate(agg_phys_NT$NAG_raw, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_NAG_NT$sd = aggregate(agg_phys_NT$NAG_raw, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_NAG_NT$se = agg_NAG_NT[,3]/sqrt(8)
+agg_NAG_NT
+
+agg_BG_NT = aggregate(agg_phys_NT$BG_raw, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_BG_NT$sd = aggregate(agg_phys_NT$BG_raw, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_BG_NT$se = agg_BG_NT[,3]/sqrt(8)
+agg_BG_NT
+```
+
+#No-Till PERMANOVA
+```{r}
+#aggregate size classes had significantly different catabolic profiles???
+adonis(agg_phys_NT[,33:37] ~ AggSize, distance="euclidean", permutations = 999, strata = block, na.rm= TRUE)
+head(agg_phys_NT)
+#PERMANOVA WAS NOT SIGNIFICANT
+```
+
+
+```{r}
+#normal
+shapiro.test(agg_phys_NT$t_c_bm.1)
+#non-normal
+shapiro.test(agg_phys_NT$t_n_bm.1)
+shapiro.test(agg_phys_NT$t_p_bm.1)
+
+```
+
+```{r}
+t_c_bm.1.aov_NT <- aov(log(t_c_bm.1) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(t_c_bm.1.aov_NT)
+
+t_n_bm.1.aov_NT <- aov(log(t_n_bm.1) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(t_n_bm.1.aov_NT)
+TukeyHSD(x = t_n_bm.1.aov, 'agg_class', conf.level=0.95)
+
+t_p_bm.1.aov_NT <- aov(log(t_p_bm.1) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(t_p_bm.1.aov_NT)
+```
+
+```{r}
+#non-normal
+shapiro.test(agg_phys_NT$BG_bm.1)
+shapiro.test(agg_phys_NT$PHOS_bm.1)
+#normal
+shapiro.test(agg_phys_NT$CBH_bm.1)
+shapiro.test(agg_phys_NT$NAG_bm.1)
+shapiro.test(agg_phys_NT$LAP_bm.1)
+
+```
+
+```{r}
+# one way anova for NAG
+NAG.aov_NT <- aov(NAG_bm.1 ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(NAG.aov_NT)
+TukeyHSD(x = NAG.aov_NT, 'agg_class', conf.level=0.95)
+
+# one way anova for LAP
+LAP.aov_NT <- aov(LAP_bm.1~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(LAP.aov_NT)
+
+# one way anova for BG
+BG.aov_NT <- aov(log(BG_bm.1) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(BG.aov_NT)
+
+# one way anova for CBH
+CBH.aov_NT <- aov((CBH_bm.1) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(CBH.aov_NT)
+
+# one way anova for PHOS
+PHOS.aov_NT <- aov(log(PHOS_bm.1) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(PHOS.aov_NT)
+
+```
+
+
+----------------------------------------------Full-Till--------------------------------------------
+#FULL-Till data broke out
+```{r}
+agg_phys_FT <- agg_iso[which(agg_iso$till_treat == "Full-Till"),]
+till<-as.factor(agg_phys_FT$till_treat)
+pst<-as.factor(agg_phys_FT$pst_treat)
+block<-as.factor(agg_phys_FT$block)
+AggSize<-as.factor(agg_phys_FT$agg_class)
+```
+
+###Data presented in Table S1
+```{r}
+agg_PHOS_FT = aggregate(agg_phys_FT$PHOS_raw, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_PHOS_FT$sd = aggregate(agg_phys_FT$PHOS_raw, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_PHOS_FT$se = agg_PHOS_FT[,3]/sqrt(8)
+agg_PHOS_FT
+
+agg_LAP_FT = aggregate(agg_phys_FT$LAP_raw, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_LAP_FT$sd = aggregate(agg_phys_FT$LAP_raw, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_LAP_FT$se = agg_LAP_FT[,3]/sqrt(8)
+agg_LAP_FT
+
+agg_CBH_FT = aggregate(agg_phys_FT$CBH_raw, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_CBH_FT$sd = aggregate(agg_phys_FT$CBH_raw, by= list(agg_phys_FT$agg_class), sd)[,2]
+agg_CBH_FT
+# Standard error was calculated and appended to the matrix.
+agg_CBH_FT$se = agg_CBH_FT[,3]/sqrt(8)
+agg_CBH_FT
+
+agg_NAG_FT = aggregate(agg_phys_FT$NAG_raw, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_NAG_FT$sd = aggregate(agg_phys_FT$NAG_raw, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_NAG_FT$se = agg_NAG_FT[,3]/sqrt(8)
+agg_NAG_FT
+
+agg_BG_FT = aggregate(agg_phys_FT$BG_raw, by = list(agg_phys_FT$agg_class), mean)
+agg_BG_FT
+# This appended the sd to the existing matrix.
+agg_BG_FT$sd = aggregate(agg_phys_FT$BG_raw, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_BG_FT$se = agg_BG_FT[,3]/sqrt(8)
+agg_BG_FT
+```
+
+
+```{r}
+#non-normal
+shapiro.test(agg_phys_FT$t_c_bm.1)
+shapiro.test(agg_phys_NT$t_p_bm.1)
+#normal
+shapiro.test(agg_phys_NT$t_n_bm.1)
+```
+
+#PERMANOVA
+```{r}
+#aggregate size classes had significantly different enzymatic necesseties
+adonis(agg_phys_FT[,33:37] ~ AggSize, distance="euclidean", permutations = 999, strata = block)
+```
+
+
+#Checking for normality prior to ANOVA
+```{r}
+shapiro.test(agg_phys_FT$LAP_bm.1)
+shapiro.test(agg_phys_FT$NAG_bm.1)
+shapiro.test(agg_phys_FT$CBH_bm.1)
+shapiro.test(agg_phys_FT$BG_bm.1)
+shapiro.test(agg_phys_FT$PHOS_bm.1)
+```
+
+```{r}
+# one way anova for LAP
+LAP.aov_FT <- aov(log(LAP_bm.1) ~ agg_class, data = agg_phys_FT)
+## Summary of the analysis
+summary(LAP.aov_FT)
+
+# one way anova for NAG
+NAG.aov_FT <- aov(log(NAG_bm.1)~ agg_class, data = agg_phys_FT)
+## Summary of the analysis
+summary(NAG.aov_FT)
+
+# one way anova for BG
+BG.aov_FT <- aov(log(BG_bm.1)~ agg_class, data = agg_phys_FT)
+## Summary of the analysis
+summary(BG.aov_FT)
+
+# one way anova for CBH 
+CBH.aov_FT <- aov(log(CBH_bm.1) ~ agg_class, data = agg_phys_FT)
+## Summary of the analysis
+summary(CBH.aov_FT)
+agg_phys_FT
+
+# one way anova for PHOS
+PHOS.aov_FT <- aov(log(PHOS_bm.1)~ agg_class, data = agg_phys_FT)
+## Summary of the analysis
+summary(PHOS.aov_FT)
+```
+
+------------Analysis of all enzyme by agg_class and tillage-----------------
+```{r}
+till<-as.factor(agg_iso$till_treat)
+pst<-as.factor(agg_iso$pst_treat)
+block<-as.factor(agg_iso$block)
+AggSize<-as.factor(agg_iso$agg_class)
+```
+
+
+#PERMANOVA of full dataset enzyme activity
+```{r}
+adonis(agg_iso[,33:37] ~ AggSize*till, distance="euclidean", permutations = 999, strata = block)
+```
+
+
+```{r}
+#non-normal
+shapiro.test(agg_iso$LAP_bm.1)
+shapiro.test(agg_iso$NAG_bm.1)
+shapiro.test(agg_iso$BG_bm.1)
+shapiro.test(agg_iso$CBH_bm.1)
+shapiro.test(agg_iso$PHOS_bm.1)
+
+shapiro.test(agg_iso$t_c_bm.1)
+shapiro.test(agg_iso$t_n_bm.1)
+shapiro.test(agg_iso$t_p_bm.1)
+```
+
+```{r}
+t_c_bm.1.aov <- aov(log(t_c_bm.1) ~ agg_class * till_treat, data = agg_iso)
+## Summary of the analysis
+summary(t_c_bm.1.aov)
+TukeyHSD(x = t_c_bm.1.aov, 'agg_class', conf.level=0.95)
+
+t_n_bm.1.aov <- aov(log(t_n_bm.1) ~ agg_class * till_treat, data = agg_iso)
+## Summary of the analysis
+summary(t_n_bm.1.aov)
+TukeyHSD(x = t_n_bm.1.aov, 'agg_class', conf.level=0.95)
+
+t_p_bm.1.aov <- aov(log(t_p_bm.1) ~ agg_class * till_treat, data = agg_iso)
+## Summary of the analysis
+summary(t_p_bm.1.aov)
+TukeyHSD(x = t_c_bm.1.aov, 'agg_class', conf.level=0.95)
+```
+
+```{r}
+bm_LAP.aov <- aov(log(LAP_bm.1) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(bm_LAP.aov)
+
+bm_NAG.aov <- aov(log(NAG_bm.1) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(bm_NAG.aov)
+TukeyHSD(bm_NAG.aov)
+
+bm_BG.aov <- aov(log(BG_bm.1) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(bm_BG.aov)
+
+bm_CBH.aov <- aov(log(CBH_bm.1) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(bm_CBH.aov)
+TukeyHSD(bm_CBH.aov)
+
+bm_PHOS.aov <- aov(log(PHOS_bm.1) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(bm_PHOS.aov)
+```
+
+
+```{r}
+agg_PHOS_bm.1 = aggregate(agg_iso$PHOS_bm.1, by = list(agg_iso$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_PHOS_bm.1$sd = aggregate(agg_iso$PHOS_bm.1, by= list(agg_iso$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_PHOS_bm.1$se = agg_PHOS_bm.1[,3]/sqrt(32)
+agg_PHOS_bm.1
+
+agg_LAP_bm.1 = aggregate(agg_iso$LAP_bm.1, by = list(agg_iso$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_LAP_bm.1$sd = aggregate(agg_iso$LAP_bm.1, by= list(agg_iso$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_LAP_bm.1$se = agg_LAP_bm.1[,3]/sqrt(32)
+agg_LAP_bm.1
+
+agg_BG_bm.1 = aggregate(agg_iso$BG_bm.1, by = list(agg_iso$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_BG_bm.1$sd = aggregate(agg_iso$BG_bm.1, by= list(agg_iso$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_BG_bm.1$se = agg_BG_bm.1[,3]/sqrt(32)
+agg_BG_bm.1
+
+agg_NAG_bm.1 = aggregate(agg_iso$NAG_bm.1, by = list(agg_iso$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_NAG_bm.1$sd = aggregate(agg_iso$NAG_bm.1, by= list(agg_iso$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_NAG_bm.1$se = agg_NAG_bm.1[,3]/sqrt(16)
+agg_NAG_bm.1
+
+agg_CBH_bm.1 = aggregate(agg_iso$CBH_bm.1, by = list(agg_iso$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_CBH_bm.1$sd = aggregate(agg_iso$CBH_bm.1, by= list(agg_iso$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CBH_bm.1$se = agg_CBH_bm.1[,3]/sqrt(32)
+agg_CBH_bm.1
+
+```
+
+
+------------Analysis of MSIR in the no-till plots---------------------------
+
+```{r}
+till<-as.factor(agg_phys_NT$till_treat)
+pst<-as.factor(agg_phys_NT$pst_treat)
+block<-as.factor(agg_phys_NT$block)
+AggSize<-as.factor(agg_phys_NT$agg_class)
+```
+
+
+#No-Till PERMANOVA
+#aggregate size classes had significantly different catabolic profiles???
+```{r}
+adonis(agg_phys_NT[,16:22] ~ AggSize, distance="euclidean", permutations = 999, strata = block)
+MR_matrix_NT <- as.matrix(agg_phys_NT[,16:22])
+MR_matrix_NT_euc <- vegdist(MR_matrix_NT, method = "euclidean")
+
+pairwise.perm.manova(MR_matrix_NT_euc, AggSize, nperm = 1000, p.method = "bonferroni" )
+```
+
+#Microresp mean and standard errors calculated for table S1
+```{r}
+# A new matrix was created with the mean and sd by agg_class for glucose
+agg_gluc_NT = aggregate(agg_phys_NT$glucose, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_gluc_NT$sd = aggregate(agg_phys_NT$glucose, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_gluc_NT$se = agg_gluc_NT[,3]/sqrt(8)
+agg_gluc_NT
+
+agg_citr_NT = aggregate(agg_phys_NT$citric_acid, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_citr_NT$sd = aggregate(agg_phys_NT$citric_acid, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_citr_NT$se = agg_citr_NT[,3]/sqrt(8)
+agg_citr_NT
+
+agg_lys_NT = aggregate(agg_phys_NT$lysine, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_lys_NT$sd = aggregate(agg_phys_NT$lysine, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_lys_NT$se = agg_lys_NT[,3]/sqrt(8)
+agg_lys_NT
+
+agg_mali_NT = aggregate(agg_phys_NT$malic_acid, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_mali_NT$sd = aggregate(agg_phys_NT$malic_acid, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_mali_NT$se = agg_mali_NT[,3]/sqrt(8)
+agg_mali_NT
+
+
+agg_arg_NT = aggregate(agg_phys_NT$arginine, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_arg_NT$sd = aggregate(agg_phys_NT$arginine, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_arg_NT$se = agg_arg_NT[,3]/sqrt(8)
+agg_arg_NT
+
+agg_ara_NT = aggregate(agg_phys_NT$arabinose, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_ara_NT$sd = aggregate(agg_phys_NT$arabinose, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_ara_NT$se = agg_ara_NT[,3]/sqrt(8)
+agg_ara_NT
+
+agg_wat_NT = aggregate(agg_phys_NT$water_resp, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_wat_NT$sd = aggregate(agg_phys_NT$water_resp, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_wat_NT$se = agg_wat_NT[,3]/sqrt(8)
+agg_wat_NT
+
+agg_tot_NT = aggregate(agg_phys_NT$tot_resp, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_tot_NT$sd = aggregate(agg_phys_NT$tot_resp, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_tot_NT$se = agg_tot_NT[,3]/sqrt(8)
+agg_tot_NT
+
+agg_treh_NT = aggregate(agg_phys_NT$trehalose, by = list(agg_phys_NT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_treh_NT$sd = aggregate(agg_phys_NT$trehalose, by= list(agg_phys_NT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_treh_NT$se = agg_treh_NT[,3]/sqrt(8)
+agg_treh_NT
+
+```
+
+
+```{r}
+#normal
+shapiro.test(agg_phys_NT$glucose)
+shapiro.test(agg_phys_NT$arabinose)
+#not normal
+shapiro.test(agg_phys_NT$lysine)
+shapiro.test(agg_phys_NT$arginine)
+#normal
+shapiro.test(agg_phys_NT$malic_acid)
+shapiro.test(agg_phys_NT$citric_acid)
+shapiro.test(agg_phys_NT$trehalose)
+#not normal
+shapiro.test(agg_phys_NT$water_resp)
+shapiro.test(agg_phys_NT$tot_resp)
+```
+
+```{r}
+# one way anova for glucose resp
+gluc.aov_NT <- aov(glucose ~ agg_class, data = agg_phys_NT)
+
+citr.aov_NT <- aov(citric_acid ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(citr.aov_NT)
+TukeyHSD(citr.aov_NT)
+
+# one way anova for malic acid resp
+mali.aov_NT <- aov(malic_acid ~ agg_class, data = agg_phys_NT)
+
+# one way anova for trehalose resp
+treh.aov_NT <- aov(trehalose ~ agg_class, data = agg_phys_NT)
+
+# one way anova for arginine resp
+argi.aov_NT <- aov(log1p(arginine) ~ agg_class, data = agg_phys_NT)
+
+# one way anova for lysine resp
+lysi.aov_NT <- aov(log1p(lysine) ~ agg_class, data = agg_phys_NT)
+
+# one way anova for arabinose resp
+arab.aov_NT <- aov(arabinose ~ agg_class, data = agg_phys_NT)
+
+wate.aov_NT <- aov(log(water_resp) ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(wate.aov_NT)
+TukeyHSD(wate.aov_NT)
+
+#one way anova for arabinose resp
+tot.aov_NT <- aov((tot_resp) ~ agg_class, data = agg_phys_NT)
+```
+
+-----------------------Analysis of MSIR in the full-till plots-----------
+```{r}
+till<-as.factor(agg_phys_FT$till_treat)
+pst<-as.factor(agg_phys_FT$pst_treat)
+block<-as.factor(agg_phys_FT$block)
+AggSize<-as.factor(agg_phys_FT$agg_class)
+```
+
+#PERMANOVA
+```{r}
+#aggregate size classes had significantly different catabolic profiles???
+adonis(agg_phys_FT[,16:22] ~ AggSize, distance="euclidean", permutations = 999, strata = block)
+```
+
+#Calculating mean and standard error values for MSIR in full-till plots- Table S1
+```{r}
+# A new matrix was created with the mean and sd by agg_class for glucose
+agg_gluc_FT = aggregate(agg_phys_FT$glucose, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_gluc_FT$sd = aggregate(agg_phys_FT$glucose, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_gluc_FT$se = agg_gluc_FT[,3]/sqrt(8)
+agg_gluc_FT
+
+agg_citr_FT = aggregate(agg_phys_FT$citric_acid, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_citr_FT$sd = aggregate(agg_phys_FT$citric_acid, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_citr_FT$se = agg_citr_FT[,3]/sqrt(8)
+agg_citr_FT
+
+agg_lys_FT = aggregate(agg_phys_FT$lysine, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_lys_FT$sd = aggregate(agg_phys_FT$lysine, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_lys_FT$se = agg_lys_FT[,3]/sqrt(8)
+agg_lys_FT
+
+agg_mali_FT = aggregate(agg_phys_FT$malic_acid, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_mali_FT$sd = aggregate(agg_phys_FT$malic_acid, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_mali_FT$se = agg_mali_FT[,3]/sqrt(8)
+agg_mali_FT
+
+
+agg_arg_FT = aggregate(agg_phys_FT$arginine, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_arg_FT$sd = aggregate(agg_phys_FT$arginine, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_arg_FT$se = agg_arg_FT[,3]/sqrt(8)
+agg_arg_FT
+
+agg_ara_FT = aggregate(agg_phys_FT$arabinose, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_ara_FT$sd = aggregate(agg_phys_FT$arabinose, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_ara_FT$se = agg_ara_FT[,3]/sqrt(8)
+agg_ara_FT
+
+agg_wat_FT = aggregate(agg_phys_FT$water_resp, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_wat_FT$sd = aggregate(agg_phys_FT$water_resp, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_wat_FT$se = agg_wat_FT[,3]/sqrt(8)
+agg_wat_FT
+
+agg_tot_FT = aggregate(agg_phys_FT$tot_resp, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_tot_FT$sd = aggregate(agg_phys_FT$tot_resp, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_tot_FT$se = agg_tot_FT[,3]/sqrt(8)
+agg_tot_FT
+
+agg_treh_FT = aggregate(agg_phys_FT$trehalose, by = list(agg_phys_FT$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_treh_FT$sd = aggregate(agg_phys_FT$trehalose, by= list(agg_phys_FT$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_treh_FT$se = agg_treh_FT[,3]/sqrt(8)
+agg_treh_FT
+```
+
+#Testing normality
+```{r}
+#non-normal
+shapiro.test(agg_phys_FT$glucose)
+#normal
+shapiro.test(agg_phys_FT$arabinose)
+#non-normal
+shapiro.test(agg_phys_FT$lysine)
+shapiro.test(agg_phys_FT$arginine)
+#normal
+shapiro.test(agg_phys_FT$malic_acid)
+shapiro.test(agg_phys_FT$citric_acid)
+shapiro.test(agg_phys_FT$trehalose)
+#log transform
+shapiro.test(agg_phys_FT$water_resp)
+shapiro.test(agg_phys_FT$tot_resp)
+
+```
+
+```{r}
+
+# one way anova for glucose resp
+gluc.aov_FT <- aov(log(glucose) ~ agg_class, data = agg_phys_FT)
+summary(gluc.aov_FT)
+
+######### Check Assumptions of the test- only do if there is significance? 
+## Assumption 1: Normality of the residual
+plot(gluc.aov_FT,2) #Q-Q plot
+shapiro.test(x = residuals(object = gluc.aov_FT)) # Shapiro-Wilk test
+
+## Assumption 2: Homogeineity of Variance
+leveneTest(log(glucose) ~ agg_class, data = agg_phys_FT)
+
+TUKEY_gluc_FT <- TukeyHSD(x = gluc.aov_FT, 'agg_class', conf.level=0.95)
+TUKEY_gluc_FT
+```
+
+```{r}
+# one way anova for citric acid resp
+citr.aov_FT <- aov(citric_acid ~ agg_class, data = agg_phys_FT)
+
+# one way anova for malic acid resp
+mali.aov_FT <- aov(malic_acid ~ agg_class, data = agg_phys_FT)
+
+# one way anova for trehalose resp
+treh.aov_FT <- aov(trehalose ~ agg_class, data = agg_phys_FT)
+
+# one way anova for arginine resp
+argi.aov_FT <- aov(log(arginine) ~ agg_class, data = agg_phys_FT)
+
+# one way anova for lysine resp
+lysi.aov_FT <- aov(log1p(lysine) ~ agg_class, data = agg_phys_FT)
+
+# one way anova for arabinose resp
+arab.aov_FT <- aov(arabinose ~ agg_class, data = agg_phys_FT)
+
+# one way anova for arabinose resp
+wate.aov_FT <- aov(log(water_resp) ~ agg_class, data = agg_phys_FT)
+
+# one way anova for arabinose resp
+tot_resp.aov_FT <- aov(log(tot_resp) ~ agg_class, data = agg_phys_FT)
+```
+
+----------------------------------------------ALL---------------------------
+
+```{r}
+till<-as.factor(agg_iso$till_treat)
+pst<-as.factor(agg_iso$pst_treat)
+block<-as.factor(agg_iso$block)
+AggSize<-as.factor(agg_iso$agg_class)
+```
+
+#PERMANOVA
+```{r}
+#aggregate size classes had significantly different catabolic profiles???
+adonis(agg_iso[,16:22] ~ AggSize*till, distance="euclidean", permutations = 999, strata = block)
+
+MR_matrix <- as.matrix(agg_iso[,16:22])
+MR_matrix_euc <- vegdist(MR_matrix, method = "euclidean")
+pairwise.perm.manova(MR_matrix_euc, AggSize, nperm = 1000, p.method = "bonferroni" )
+```
+
+
+
+```{r}
+
+shapiro.test(agg_iso$glucose)
+shapiro.test(agg_iso$citric_acid)
+shapiro.test(agg_iso$arabinose)
+
+#non-normal
+shapiro.test(agg_iso$malic_acid)
+shapiro.test(agg_iso$trehalose)
+#non-normal
+shapiro.test(agg_iso$arginine)
+#non-normal
+shapiro.test(agg_iso$lysine)
+shapiro.test(agg_iso$tot_resp)
+```
+
+
+```{r}
+gluc.aov_ALL <- aov(glucose ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(gluc.aov_ALL)
+TUKEY_gluc_ALL <- TukeyHSD(x = gluc.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_gluc_ALL
+
+```
+
+
+
+```{r}
+citr.aov_ALL <- aov(citric_acid ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(citr.aov_ALL)
+TUKEY_citr_ALL <- TukeyHSD(x = citr.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_citr_ALL
+```
+
+```{r}
+
+#arabinose resp
+arab.aov_ALL <- aov(arabinose ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(arab.aov_ALL)
+
+TUKEY_arab_ALL <- TukeyHSD(x = arab.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_arab_ALL
+```
+
+```{r}
+
+#lysine resp
+lysi.aov_ALL <- aov(log1p(lysine) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(lysi.aov_ALL)
+
+TUKEY_lysi_ALL <- TukeyHSD(x = lysi.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_lysi_ALL
+```
+
+```{r}
+#arginine resp
+argi.aov_ALL <- aov(log1p(arginine) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(argi.aov_ALL)
+
+TUKEY_argi_ALL <- TukeyHSD(x = argi.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_argi_ALL
+```
+
+```{r}
+#malic acid resp
+mali.aov_ALL <- aov(log1p(malic_acid) ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(mali.aov_ALL)
+
+TUKEY_mali_ALL <- TukeyHSD(x = mali.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_mali_ALL
+```
+
+```{r}
+#trehalose resp
+treh.aov_ALL <- aov(trehalose ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(treh.aov_ALL)
+
+#arabinose resp
+tot_resp.aov_ALL <- aov(tot_resp ~ agg_class*till_treat, data = agg_iso)
+## Summary of the analysis
+summary(tot_resp.aov_ALL)
+```
+
+
+```{r}
+# matrix created with the mean and sd by tillage for glucose resp
+agg_gluc = aggregate(agg_iso$tot_resp, by = list(agg_iso$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_gluc$sd = aggregate(agg_iso$tot_resp, by= list(agg_iso$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_gluc$se = agg_gluc[,3]/sqrt(32)
+
+# matrix created with the mean and sd by agg_class for glucose resp
+agg_gluc = aggregate(agg_iso$glucose, by = list(agg_iso$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_gluc$sd = aggregate(agg_iso$glucose, by= list(agg_iso$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_gluc$se = agg_gluc[,3]/sqrt(16)
+
+# matrix created with the mean and sd by agg_class for arabinose resp
+agg_arab = aggregate(agg_iso$arabinose, by = list(agg_iso$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_arab$sd = aggregate(agg_iso$arabinose, by= list(agg_iso$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_arab$se = agg_arab[,3]/sqrt(16)
+
+# matrix created with the mean and sd by agg_class for citric acid resp
+agg_citr = aggregate(agg_iso$citric_acid, by = list(agg_iso$agg_class), mean)
+# This appended the sd to the existing matrix.
+agg_citr$sd = aggregate(agg_iso$citric_acid, by= list(agg_iso$agg_class), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_citr$se = agg_citr[,3]/sqrt(16)
+```
+
+```{r}
+# matrix created with the mean and sd by agg_class for total MSIR
+agg_tot = aggregate(agg_iso$tot_resp, by = list(agg_iso$till_treat), mean)
+# This appended the sd to the existing matrix.
+agg_tot$sd = aggregate(agg_iso$tot_resp, by= list(agg_iso$till_treat), sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_tot$se = agg_tot[,3]/sqrt(32)
+agg_tot
+```
+
+
+
+###################################--CUE--##################################
+
+#CUE full till analysis
+```{r}
+# A new matrix was created with the mean and sd by agg_class for CUE
+agg_CUE_FT = aggregate(agg_phys_FT$CUE, by = list(agg_phys_FT$agg_class), na.rm= TRUE, mean)
+agg_CUE_FT
+# This appended the sd to the existing matrix.
+agg_CUE_FT$sd = aggregate(agg_phys_FT$CUE, by= list(agg_phys_FT$agg_class), na.rm= TRUE, sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CUE_FT$se = agg_CUE_FT[,3]/sqrt(16)
+agg_CUE_FT
+```
+#CUE No-till analysis
+```{r}
+# A new matrix was created with the mean and sd by agg_class for CUE
+agg_CUE_NT = aggregate(agg_phys_NT$CUE, by = list(agg_phys_NT$agg_class), na.rm= TRUE, mean)
+# This appended the sd to the existing matrix.
+agg_CUE_NT$sd = aggregate(agg_phys_NT$CUE, by= list(agg_phys_NT$agg_class), na.rm= TRUE, sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CUE_NT$se = agg_CUE_NT[,3]/sqrt(16)
+agg_CUE_NT
+```
+
+# CUE agg_class * tillage analysis
+```{r}
+# A new matrix was created with the mean and sd by agg_class for CUE
+agg_CUE = aggregate(agg_iso$CUE, by = list(agg_iso$agg_class), na.rm= TRUE, mean)
+# This appended the sd to the existing matrix.
+agg_CUE$sd = aggregate(agg_iso$CUE, by= list(agg_iso$agg_class), na.rm= TRUE, sd)[,2]
+# Standard error was calculated and appended to the matrix.
+agg_CUE$se = agg_CUE[,3]/sqrt(16)
+agg_CUE
+```
+```{r}
+
+CUE.aov_NT <- aov(CUE ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(CUE.aov_NT)
+
+
+CUE.aov_FT <- aov(CUE ~ agg_class, data = agg_phys_NT)
+## Summary of the analysis
+summary(CUE.aov_FT)
+TukeyHSD(x = CUE.aov_FT, 'agg_class', conf.level=0.95)
+
+CUE.aov_ALL <- aov(CUE ~ agg_class * till_treat, data = agg_iso)
+## Summary of the analysis
+summary(CUE.aov_ALL)
+TUKEY_CUE.aov <- TukeyHSD(x = CUE.aov_ALL, 'agg_class', conf.level=0.95)
+TUKEY_CUE.aov
+
+```
+
+-----------------------------------Figures for publication-----------------
+
+#Making publication graphics
+```{r}
+CUE <- ggplot(agg_iso, aes(x = agg_class, y = CUE)) + geom_boxplot(aes(fill=agg_class)) + scale_fill_manual(values= c("grey96", "grey70", "grey55", "grey36")) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "right",  
+     axis.text.x = element_text(size = 8, colour = "black"),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 12, colour = "black"), 
+     axis.title.y = element_text(face = , size = 13, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black"), 
+     legend.key=element_blank()) + 
+     labs(x= agg_iso$agg_class, y = "Community Carbon Use Efficiency")
+
+
+
+CUE
+setwd("C:/Users/lukas/OneDrive/Desktop/publication_images")
+ggsave("CUE.png", plot = CUE, dpi = 400, height = 5, width = 7)
+```
+
+#Community weighted genome size by tillage figure
+```{r}
+agg_iso
+p <- ggplot(data = agg_iso, aes(x=agg_class, y=(CWM_mbp))) + 
+             geom_boxplot(aes(fill=till_treat)) + scale_fill_manual(values= c("grey96", "grey61")) + theme_bw()
+p <- p + facet_wrap( ~ till_treat, scales="free") + 
+  theme(axis.text.x =  element_text(angle=65, vjust=0.6, size= 8), axis.text.y = element_text(size= 8), axis.title.y = element_text(size = 8)) + 
+  labs(title=, 
+       subtitle=,
+       caption=,
+       legend= "Aggregate Size",
+       x= "",
+       y="Community Weighted Mean Genome Size (Mbp)") + 
+        theme(legend.title = element_text(size = 8, face =), legend.text = element_text(size = 8, face =)) 
+
+p
+```
+
+```{r}
+PHOS_grey <- ggplot(agg_iso, aes(x = agg_class, y = PHOS_bm.1, fill= till_treat)) + 
+     geom_boxplot(colour = "black", position = position_dodge(0.8)) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "none", 
+     axis.text.x = element_text(face = , size = 8, colour = "black"),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 8, colour = "black"), 
+     axis.title.y = element_text(face = , size = 8, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black"), 
+     legend.key=element_blank()) + 
+     labs(x= agg_iso$agg_class, y = "Phosphatase")  + 
+     scale_fill_manual(values = c("grey100", "grey80"))
+
+PHOS_grey
+
+BG_grey <- ggplot(agg_iso, aes(x = agg_class, y = BG_bm.1, fill= till_treat)) + 
+     geom_boxplot(colour = "black", position = position_dodge(0.8)) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "none", 
+     axis.text.x = element_blank(),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 8, colour = "black"), 
+     axis.title.y = element_text(face = , size = 8, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black"), 
+     legend.key=element_blank()) + 
+     labs(x= agg_iso$agg_class, y = "Beta-Glucosidase")  + 
+     scale_fill_manual(values = c("grey100", "grey80"))
+
+CBH_grey <- ggplot(agg_iso, aes(x = agg_class, y = CBH_bm.1, fill= till_treat)) + 
+     geom_boxplot(colour = "black", position = position_dodge(0.8)) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "none", 
+     axis.text.x = element_blank(),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 8, colour = "black"), 
+     axis.title.y = element_text(face = , size = 8, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black"), 
+     legend.key=element_blank()) + 
+     labs(x= agg_iso$agg_class, y = "Cellobiohydrolase")  + 
+     scale_fill_manual(values = c("grey100", "grey80"))
+
+NAG_grey <- ggplot(agg_iso, aes(x = agg_class, y = NAG_bm.1, fill= till_treat)) + 
+     geom_boxplot(colour = "black", position = position_dodge(0.8)) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "none", 
+     axis.text.x = element_blank(),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 8, colour = "black"), 
+     axis.title.y = element_text(face = , size = 8, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black"), 
+     legend.key=element_blank()) + 
+     labs(x= agg_iso$agg_class, y = "N-acetyl-glucosaminidase")  + 
+     scale_fill_manual(values = c("grey100", "grey80"))
+
+LAP_grey <- ggplot(agg_iso, aes(x = agg_class, y = LAP_bm.1, fill= till_treat)) + 
+     geom_boxplot(colour = "black", position = position_dodge(0.8)) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "none", 
+     axis.text.x = element_blank(),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 8, colour = "black"), 
+     axis.title.y = element_text(face = , size = 8, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black"), 
+     legend.key=element_blank()) + 
+     labs(x= agg_iso$agg_class, y = "Leucine Aminopeptidase")  + 
+     scale_fill_manual(values = c("grey100", "grey80"))
+
+tot_enz_grey <- ggplot(agg_iso, aes(x = agg_class, y = t_enz_bm.1, fill= till_treat)) + 
+     geom_boxplot(colour = "black", position = position_dodge(0.8)) +
+     geom_vline(xintercept = c(1.5,2.5,3.5), colour = "grey85", size = 1.2) +
+     theme(legend.title = element_text(size = 10, face = "bold"), 
+     legend.text = element_text(size = 10, face = "bold"), legend.position = "right", 
+     axis.text.x = element_text(face = , size = 8, colour = "black"),
+     axis.title.x = element_blank(),
+     axis.text.y = element_text(face = , size = 8, colour = "black"), 
+     axis.title.y = element_text(face = , size = 8, colour = "black"), 
+     panel.background = element_blank(), 
+     panel.border = element_rect(fill = NA, colour = "black")) + 
+     labs(x= agg_iso$agg_class, y = "Total Enzyme Activity")  + 
+     scale_fill_manual(values = c("grey100", "grey80"))
+
+```
+
+```{r}
+enzyme_figure <- ggarrange(BG_grey, CBH_grey, NAG_grey, LAP_grey, PHOS_grey, tot_enz_grey + rremove("x.text"), 
+          labels = c("A", "B", "C", "D", "E", "F", "G", "H"),
+          ncol = 2, nrow = 3, heights = c(8,8,8,8), vjust = 1, font.label = list(size = 2))
+
+enzyme_figure
+```
+
+```{r}
+ggsave("enzyme_figure.png", plot = enzyme_figure, dpi = 400, height = 5, width = 7)
+ggsave("CWM_mbp.png", plot = p, dpi = 400, height = 5, width = 7)
+```
+
+#linear model of CUE and community weighted mean genome size
+```{r}
+
+lm_formula <- y ~ x
+CUE_tradeoff = ggplot(agg_iso, aes(y = CUE, x = CWM_mbp)) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Community CUE", x = "Community Weighted Genome Size (mbp)" ) + 
+    theme( axis.text.x = element_text(face = "bold",colour = "black", size = 8), 
+        axis.text.y = element_text(face = "bold", size = 8, colour = "black"), 
+        axis.title= element_text(face = "bold", size = 10, colour = "black"), 
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =12, face = "bold", colour = "black"),
+        legend.text = element_text(size = 10, face = "bold", colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula) 
+
+CUE_tradeoff
+ggsave("CUE_tradeoff.png", plot = CUE_tradeoff, dpi = 400, height = 5, width = 7)
+
+```
+
+
+```{r}
+cue_t_c = ggplot(agg_iso, aes(y = CUE, x = log(t_c_bm.1))) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Community CUE", x = "log(Total C Enzyme Activity)" ) +
+    theme(legend.position = "None", axis.text.x = element_text(face = ,colour = "black", size = 8), 
+        axis.text.y = element_text(face = , size = 8, colour = "black"), 
+        axis.title= element_text(face = , size = 8, colour = "black"), 
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =12, face = "bold", colour = "black"),
+        legend.text = element_text(size = 10, face = "bold", colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula, size= 3) 
+
+cue_t_c
+
+cue_t_n = ggplot(agg_iso, aes(y = CUE, x = log(t_n_bm.1))) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Community CUE", x = "log(Total N Enzyme Activity)" ) + 
+    theme(legend.position = "None", axis.text.x = element_text(face = ,colour = "black", size = 8), 
+        axis.text.y = element_blank(), 
+        axis.title.y= element_blank(),
+        axis.title.x= element_text(face = , size = 8, colour = "black"),
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =12, face = , colour = "black"),
+        legend.text = element_text(size = 10, face = "bold", colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula, size= 3) 
+
+cue_t_n
+
+cue_t_p = ggplot(agg_iso, aes(y = CUE, x = log(t_p_bm.1))) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Community CUE", x = "log(Total P Enzyme Activity)" ) + 
+    theme(legend.position= "None", axis.text.x = element_text(face = ,colour = "black", size = 8), 
+        axis.text.y = element_text(face = , size = 8, colour = "black"), 
+        axis.title.x= element_text(face = , size = 8, colour = "black"),
+        axis.title.y= element_text(face = , size = 8, colour = "black"),
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =10, face = , colour = "black"),
+        legend.text = element_text(size = 10, face = , colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula, size= 3) 
+
+cue_t_p
+
+legend1 = ggplot(agg_iso, aes(y = CUE, x = log(t_p_bm.1))) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Community CUE", x = "log(Total P Enzyme Activity)" ) + 
+    theme(legend.position= "right", axis.text.x = element_text(face = ,colour = "black", size = 8), 
+        axis.text.y = element_text(face = , size = 8, colour = "black"), 
+        axis.title.x= element_text(face = , size = 8, colour = "black"),
+        axis.title.y= element_text(face = , size = 8, colour = "black"),
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =10, face = , colour = "black"),
+        legend.text = element_text(size = 10, face = , colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula, size= 3) 
+
+legend1
+
+a<- get_legend(legend1)
+leg <- as_ggplot(a)
+
+CUE_enz_figure <- ggarrange(cue_t_c, cue_t_n, cue_t_p, leg, 
+          labels = c("A", "B", "C"),
+          ncol = 2, nrow = 2, font.label = list(size= 8), align = "v")
+
+CUE_enz_figure
+ggsave("CUE_enz_tradeoff.png", plot = CUE_enz_figure, dpi = 400, height = 5, width = 7)
+
+```
+
+
+
+```{r}
+agg_iso$lg_t_c_bm.1 <- log(agg_iso$t_c_bm.1)
+agg_iso$lg_t_n_bm.1 <- log(agg_iso$t_n_bm.1)
+agg_iso$lg_t_p_bm.1 <- log(agg_iso$t_p_bm.1)
+
+ggplotRegression <- function(dat, xvar, yvar){
+  
+  fml <- paste(yvar, "~", xvar)
+
+  fit <- lm(fml, dat)
+  
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+    geom_point() +
+    stat_smooth(method = "lm", col = "red") +
+    labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                       "Intercept =",signif(fit$coef[[1]],5 ),
+                       " Slope =",signif(fit$coef[[2]], 5),
+                       " P =",signif(summary(fit)$coef[2,4], 5)))
+}
+ggplotRegression(agg_iso, "CUE", "lg_t_c_bm.1")
+
+```
+
+#lm analysis of tradeoffs between cue and enzyme activity
+```{r}
+
+lm_cue_mbp = lm(data= agg_iso, CUE~CWM_mbp)
+summary(lm_cue_mbp)
+
+lm_cue_t_c_bm = lm(data= agg_iso, CUE~log(t_c_bm.1))
+cf_lm_cue_t_c_bm <- coef(lm_cue_t_c_bm)
+cf_lm_cue_t_c_bm["x"]
+summary(lm_cue_t_c_bm)
+
+lm_cue_t_phos_bm = lm(data= agg_iso, CUE~log(PHOS_bm.1))
+summary(lm_cue_t_phos_bm)
+
+lm_cue_t_n_bm = lm(data= agg_iso, CUE~log(t_n_bm.1))
+summary(lm_cue_t_n_bm)
+```
+#Supplemental figures 
+```{r}
+head(agg_iso)
+biomass_comp1 = ggplot(agg_iso, aes(y = MBC_ando , x = TC)) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Microbial Biomass (ug Mic-C g-1 dry soil)", x = "Total C (g C g-1 dry soil)" ) + 
+    theme(legend.position= "right", axis.text.x = element_text(face = ,colour = "black", size = 8), 
+        axis.text.y = element_text(face = , size = 8, colour = "black"), 
+        axis.title.x= element_text(face = , size = 8, colour = "black"),
+        axis.title.y= element_text(face = , size = 8, colour = "black"),
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =10, face = , colour = "black"),
+        legend.text = element_text(size = 10, face = , colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula, size= 3) 
+
+biomass_comp1
+
+biomass_comp2 = ggplot(agg_iso, aes(y = MBC_ando , x = DNA_ug_g.1)) +
+  geom_smooth(method = "lm", alpha = 0.18, colour = "black") + 
+    geom_point(aes(colour = agg_class), size = 2) +
+    labs(y = "Microbial Biomass (ug Mic-C g-1 dry soil)", x = "DNA (ng DNA g-1 dry soil)" ) + 
+    theme(legend.position= "right", axis.text.x = element_text(face = ,colour = "black", size = 8), 
+        axis.text.y = element_text(face = , size = 8, colour = "black"), 
+        axis.title.x= element_text(face = , size = 8, colour = "black"),
+        axis.title.y= element_text(face = , size = 8, colour = "black"),
+        panel.background = element_blank(), 
+        panel.border = element_rect(fill = NA, colour = "black"), 
+        legend.title = element_text(size =10, face = , colour = "black"),
+        legend.text = element_text(size = 10, face = , colour = "black")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000")) + stat_regline_equation(aes(label =  paste(..rr.label.., sep = "~~~~")),formula = lm_formula, size= 3) 
+
+biomass_comp2
+
+ggsave("biomass_compDNA.png", plot = biomass_comp1, dpi = 400, height = 5, width = 7)
+
+ggsave("biomass_compTC.png", plot = biomass_comp2, dpi = 400, height = 5, width = 7)
+
+```

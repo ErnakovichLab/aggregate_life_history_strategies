@@ -1,0 +1,337 @@
+---
+title: "nmds_community_LTB"
+author: "Lukas Bernhardt"
+date: "9/4/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#load your libraries
+```{r}
+library(vegan)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(vegan)
+library(dplyr)
+library(ggplot2)
+#library(scatterplot3d)
+#library(vegan3d)
+library(readr)
+library(tibble)
+library(RVAideMemoire)
+#library(vegan3d)
+#library(rgl)
+#library(plot3D)
+library(RColorBrewer)
+library(ggrepel)
+library(multcomp)
+```
+
+
+-----------------------------------16S Community Analysis--------------------
+#import your csv of choice at whatever taxonomic level you desire. Here I am importing csv's of my 16S community data at the OTU level
+```{r}
+species_cl= read.csv(file.choose(), sep=",", head= TRUE)
+
+head(species_cl)
+#breaking up the original data frame to just include the no-till sites, full-till sites at the class level
+species_cl_NT <- species_cl[which(species_cl$Tillage == "No-Till"),]
+
+species_cl_FT <- species_cl[which(species_cl$Tillage == "Full-Till"),]
+species_cl_FT
+
+#making matrices of just the OTU's in all of the above instances
+
+jst_cl_NT <- as.data.frame(species_cl_NT[,12:ncol(species_cl_NT)])
+jst_cl_FT <- as.data.frame(species_cl_FT[,12:ncol(species_cl_FT)])
+
+head(jst_cl)
+jst_cl <- as.data.frame(species_cl[,12:ncol(species_cl)])
+
+```
+#Rename the factors 
+```{r}
+species_cl$Pesticide[species_cl$Pesticide==2]<-"PST"
+species_cl$Pesticide[species_cl$Pesticide==1]<-"No-PST"
+species_cl$Tillage[species_cl$Tillage==1]<-"No-Till"
+species_cl$Tillage[species_cl$Tillage==2]<-"Full-Till"
+species_cl$AggSize[species_cl$AggSize==1]<-"1mm-2mm"
+species_cl$AggSize[species_cl$AggSize==2]<-"0.025mm-1mm"
+species_cl$AggSize[species_cl$AggSize==3]<-"<0.025mm"
+species_cl$AggSize[species_cl$AggSize==4]<-">2mm"
+
+```
+species_cl
+
+#ordering the factors as I want them to appear in my figures
+```{r}
+head(species_cl)
+species_cl$Block <- factor(species_cl$Block, levels= c("1", "2", "3", "4"))
+species_cl$Tillage <- factor(species_cl$Tillage, levels= c("No-Till", "Full-Till"))
+species_cl$Pesticide <- factor(species_cl$Pesticide, levels= c("No-PST", "PST"))
+species_cl$AggSize <- factor(species_cl$AggSize, levels= c("<0.025mm", "0.025mm-1mm", "1mm-2mm", ">2mm"))
+
+species_cl_NT$Block <- factor(species_cl_NT$Block, levels= c("1", "2", "3", "4"))
+species_cl_NT$Pesticide <- factor(species_cl_NT$Pesticide, levels= c("No-PST", "PST"))
+species_cl_NT$AggSize <- factor(species_cl_NT$AggSize, levels= c("<0.025mm", "0.025mm-1mm", "1mm-2mm", ">2mm"))
+
+
+species_cl_FT$Block <- factor(species_cl_FT$Block, levels= c("1", "2", "3", "4"))
+species_cl_FT$Pesticide <- factor(species_cl_FT$Pesticide, levels= c("No-PST", "PST"))
+species_cl_FT$AggSize <- factor(species_cl_FT$AggSize, levels= c("<0.025mm", "0.025mm-1mm", "1mm-2mm", ">2mm"))
+```
+
+
+###-------------------------Community Analysis---------------------------###
+
+####SHANNONS DIVERSITY#### - FT, NT and ALL
+```{r}
+#checking out shannon's diversity for class and species between no till, full-till seperately and the whole data set
+
+shan_cl_NT <- diversity(jst_cl_NT)
+species_cl_NT$cl_shan <- shan_cl_NT
+NTshan.anov <- aov(cl_shan ~ AggSize, data = species_cl_NT)
+summary(NTshan.anov)
+
+
+shan_cl_FT <- diversity(jst_cl_FT)
+species_cl_FT$cl_shan <- shan_cl_FT
+FTshan.anov <- aov(cl_shan ~ Pesticide, data = species_cl_FT)
+summary(FTshan.anov)
+
+shan_cl <- diversity(jst_cl)
+species_cl$cl_shan <- shan_cl
+SPshan.anov <- aov(cl_shan ~ AggSize * Tillage, data = species_cl)
+summary(SPshan.anov)
+#Shannon diversity is significantly different between aggregate size classes when full-till and no-till plots are combined together into one analysis
+```
+
+
+####NMDS/PERMANOVA#### - ALL - class
+
+#log transforming my bacterial community data and making a distance matrix from the results
+#log+1 used because log(0) is undefined 
+```{r}
+lg_jst_cl <- log1p(jst_cl)
+lg_jst_cl <- data.matrix(lg_jst_cl)
+
+cl_bray_dist <- vegdist(jst_cl, method = "bray")
+
+```
+
+
+#NMDS: with bray curtis distance measure. Performed for multiple axes. axis where stress decreased by >0.05 was retained. Best solution is on three axes
+Stress evalution:
+<.05 - excellent
+.05-.10 - good
+.10-.20 - usable, potential to mislead at upper end
+
+#Running NMDS at with different amount of axes to see which one has the best stress (bray curtis distance used)
+```{r}
+NMDS_lg_cl_1 <- metaMDS(lg_jst_cl, distance = "bray", k= 1, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_2 <- metaMDS(lg_jst_cl, distance = "bray", k=2, autotransform = FALSE, trymax= 1000)
+NMDS_lg_cl_3 <- metaMDS(jst_cl, distance = "bray", k=3, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_4 <- metaMDS(lg_jst_cl, distance = "bray", k= 4, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_5 <- metaMDS(lg_jst_cl, distance = "bray", k=5, autotransform = FALSE, trymax = 1000)
+NMDS_lg_cl_6 <- metaMDS(lg_jst_cl, distance = "bray", k=6, autotransform = FALSE, trymax = 1000)
+
+
+#determined 3 axis solution was best
+spp_stressvector<-as.vector(c(NMDS_lg_cl_1$stress, NMDS_lg_cl_2$stress, NMDS_lg_cl_3$stress, NMDS_lg_cl_4$stress, NMDS_lg_cl_5$stress, NMDS_lg_cl_6$stress))
+plot(spp_stressvector)
+
+#looking at the stress for solutions with axes 2-5
+NMDS_lg_cl_2$stress
+NMDS_lg_cl_3$stress
+NMDS_lg_cl_4$stress
+NMDS_lg_cl_5$stress
+
+```
+***Adding environmental variables***
+
+#Making environmental matrix should just include the metadata (block, plot etc...) and any other environmental variables of interest (pH, EC, total carbon, etc...)
+```{r}
+head(species_cl)
+env_var <- as.data.frame(species_cl[,1:11])
+env_var
+```
+
+
+#extracting the site and species scores from the NMDS for plotting
+#Choose which NMDS axis you want to plot and substitute for "NMDS_lg_cl_3"
+```{r}
+site.scrs <- as.data.frame(scores(NMDS_lg_cl_3, display = "sites"))
+
+#Two ways to accomplish the same thing
+
+site.scrs$AggSize = env_var$AggSize
+site.scrs$Tillage = env_var$Tillage
+site.scrs$Block = env_var$Block
+site.scrs
+
+#Species Scores
+spp.scrs <- as.data.frame(scores(NMDS_lg_cl_3, display = "species"))
+spp.scrs <- cbind(spp.scrs, Species = row.names(spp.scrs))
+
+spp.scrs
+```
+
+```{r}
+### First, let's relativize the environmental data. We only actually have one numeric environmental variables, so it is not important in this situation, but when you have several environmental variables, it frequently is. Imagine environmental variables whose units are not comparable (ie. pH, depth of soil horizon, canopy cover, etc.). It is particularly important to standardize such values. The vegan function decostand() is really useful for this purpose! 
+
+env_var
+
+env_var$Block <- as.factor(env_var$Block)
+env_var$AggSize <- as.factor(env_var$AggSize)
+env_var$Tillage <- as.factor(env_var$Tillage)
+env_var$Pesticide <- as.factor(env_var$Pesticide)
+
+
+env_var_rel_lg <- decostand(select_if(env_var, is.numeric), method = "log")
+
+env_var_rel_fit <- envfit(NMDS_lg_cl_3, env_var_rel_lg, choices = 1:2, permutations = 999)
+env.scores <- as.data.frame(scores(env_var_rel_fit, display = "vectors"))
+env.scores
+env.scores2 <- cbind(env.scores, env.variables = rownames(env.scores), pval = env_var_rel_fit$vectors$pvals)
+env.scores2 <- subset(env.scores2, pval<=0.05)
+env.scores2
+# NMDS_1v2_spp_scrs_with_env
+```
+***Plotting***
+
+Add sites
+```{r}
+plot(NMDS_lg_cl_3, "sites")
+orditorp(plot(NMDS_lg_cl_3), display="sites", col= "red", air= 0.01)   # Gives points labels
+
+#color by till_treat
+NMDS_1v2 <- ggplot(site.scrs, aes(x = NMDS1, y = NMDS2)) + geom_point(aes(NMDS1, NMDS2, shape = Tillage, colour = factor(AggSize)), size = 2.6) + labs(colour = "Aggregate Size Class", shape = "Tillage Treatment") + theme_classic() + theme(legend.title = element_text(size = 10, face = "bold"), legend.text = element_text(size = 8, face = "bold")) + scale_color_manual(values= c("#ffcc00", "#669900", "#663300", "#e60000"))
+NMDS_1v2
+
+species_cl
+
+
+```
+
+
+#Add environmental variables
+```{r}
+NMDS_1v2_with_env <- NMDS_1v2 + geom_segment(data = env.scores2, aes(x = 0, xend = NMDS1*0.85, y = 0, yend = NMDS2*0.85), arrow = arrow(length = unit(0.25, "cm")), colour = "grey10", lwd = 0.3) + ggrepel::geom_text_repel(data = env.scores2, aes(x = NMDS1*0.9, y = NMDS2*0.9, label = env.variables), cex = 4, direction = "both", segment.size = 0.25)
+NMDS_1v2_with_env                                                                  
+ggsave("16S_community_NMDS.png", plot = NMDS_1v2_with_env, dpi = 400, height = 5, width = 7)
+
+
+
+```
+
+
+
+#Saving figures for publication!
+```{r}
+NMDS_1v2_with_env
+setwd("_______________________")
+ggsave("community_class_NMDS.png", plot = NMDS_1v2_with_env, dpi = 400, height = 5, width = 6)
+
+```
+
+
+By changing NMDS1 and NMDS2, you can make figures for NMDS1 vs. NMDS3 and NMDS2 vs NMDS3
+
+NMDS axis: 
+The interpretation of NMDS ordinations is fundementally different than PCA. The first axis in PCA, by definition, always explains the most variation in the data. The second axis explains the second most variation orthoganal to the first axis. NMDS axis should be treated as meaningless. The number of axis is defined by the user, and the algorithm then attempts to reposition the observations in a way that maintains their ranked distances.  
+
+
+********************************PERMANOVA*********************************************************
+
+```{r}
+#Adonis acts on matrices
+lg_cl_matrix <- as.matrix(jst_cl)
+
+
+##makes objects or or vectors of you treatments for use in next step(don't exactly know why I needed to do this but I had to) CHECK FOR YOURSELF!!!
+tillage <-as.factor(species_cl$Tillage)
+pst<-as.factor(species_cl$Pesticide)
+block<-as.factor(species_cl$Block)
+agg_class<-as.factor(species_cl$AggSize)
+
+#this is where you actually do the permanovas.  There are slight differences between using "+", "*" or "/" for the interaction effects.  you may need to look into what works well for you if your stuff is factorial (replace ENZdata.M with whatever you called your response matrix).  Do some research on strata= this constrains the permutations and is an important thing to consider. There are also a shitton more options that can be set to check out. there is also an adonis2 but I don't know the difference!!!
+adonis(lg_cl_matrix ~ agg_class*tillage, distance="bray", permutations = 999, strata = block)
+```
+
+#This does pairwise comparrisons to check for differences withing treatment levels. I checked pairwise to see if there were differences among my size classes or block.  The first line of code here makes a distance matrix using bray curtis distance from my original data matrix
+
+#Bonferroni correction to be conservative and reduce the chance of type 1 error
+```{r}
+###pairwise comparisons of emergent data
+###first we need to create a distance matrix
+lg_cl_matrix_B <- vegdist(lg_cl_matrix, distance= "bray")
+
+pairwise.perm.manova(lg_cl_matrix_B, tillage, nperm = 1000, p.method = "bonferroni")
+pairwise.perm.manova(lg_cl_matrix_B, block, nperm = 1000, p.method = "bonferroni")
+pairwise.perm.manova(lg_cl_matrix_B, agg_class, nperm = 1000, p.method = "bonferroni")
+```
+
+**********************************************************************************************************************************************************
+
+####PERMANOVA#### NT
+
+```{r}
+#Adonis acts on matrices
+lg_cl_NT_matrix <- as.matrix(lg_jst_cl_NT)
+str(lg_cl_NT_matrix)
+head(lg_cl_NT_matrix)
+
+##makes objects or or vectors of you treatments for use in next step(don't exactly know why I needed to do this but I had to) CHECK FOR YOURSELF!!!
+tillage_NT <-as.factor(env_var_NT$Tillage)
+pst_NT<-as.factor(env_var_NT$Pesticide)
+block_NT<-as.factor(env_var_NT$Block)
+agg_class_NT<-as.factor(env_var_NT$AggSize)
+
+#this is where you actually do the permanovas.  There are slight differences between using "+", "*" or "/" for the interaction effects.  you may need to look into what works well for you if your stuff is factorial (replace ENZdata.M with whatever you called your response matrix).  Do some research on strata= this constrains the permutations and is an important thing to consider. There are also a shitton more options that can be set to check out. there is also an adonis2 but I don't know the difference!!!
+adonis(lg_cl_NT_matrix ~ agg_class_NT, distance="bray", permutations = 999, strata = block_NT)
+```
+
+
+**********************************************************************************************************************************************************
+By changing NMDS1 and NMDS2, you can make figures for NMDS1 vs. NMDS3 and NMDS2 vs NMDS3
+
+NMDS axis: 
+The interpretation of NMDS ordinations is fundementally different than PCA. The first axis in PCA, by definition, always explains the most variation in the data. The second axis explains the second most variation orthoganal to the first axis. NMDS axis should be treated as meaningless. The number of axis is defined by the user, and the algorithm then attempts to reposition the observations in a way that maintains their ranked distances.  
+
+####PERMANOVA#### FT
+
+```{r}
+#Adonis acts on matrices
+lg_cl_FT_matrix <- as.matrix(lg_jst_cl_FT)
+str(lg_cl_FT_matrix)
+head(lg_cl_FT_matrix)
+
+##makes objects or or vectors of you treatments for use in next step(don't exactly know why I needed to do this but I had to) CHECK FOR YOURSELF!!!
+tillage_FT <-as.factor(env_var_FT$Tillage)
+pst_FT<-as.factor(env_var_FT$Pesticide)
+block_FT<-as.factor(env_var_FT$Block)
+agg_class_FT<-as.factor(env_var_FT$AggSize)
+
+#this is where you actually do the permanovas.  There are slight differences between using "+", "*" or "/" for the interaction effects.  you may need to look into what works well for you if your stuff is factorial (replace ENZdata.M with whatever you called your response matrix).  Do some research on strata= this constrains the permutations and is an important thing to consider. There are also a shitton more options that can be set to check out. there is also an adonis2 but I don't know the difference!!!
+adonis(lg_cl_FT_matrix ~ agg_class_FT, distance="bray", permutations = 999, strata = block_FT)
+```
+
+```{r}
+###pairwise comparisons of emergent data
+###first we need to create a distance matrix
+lg_cl_bray_dist
+
+pairwise.perm.manova(lg_cl_bray_dist_FT, block_FT, nperm = 1000, p.method = "bonferroni")
+pairwise.perm.manova(lg_cl_bray_dist_FT, agg_class_FT, nperm = 1000, p.method = "bonferroni")
+```
+
+--------------------------------ITS community analysis-----------------------
+
+
+
+
